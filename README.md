@@ -71,4 +71,4 @@ The whole project (requirements, technical design, backend, frontend, tests, and
 **Prerequisites:** [uv](https://docs.astral.sh/uv/) and Node 20+ (with npm). The database is embedded and starts automatically.
 
 ```sh
-git clone [https://github.com/SubjectAlphaChisato/esum.git](https://github.com/SubjectAlphaChisato/esum.git) esum && cd esum
+git clone [https://github.com/lingcode-dev/esum.git](https://github.com/lingcode-dev/esum.git) esum && cd esum
