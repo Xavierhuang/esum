@@ -5,6 +5,7 @@ Live verification against Google is intentionally not part of this suite.
 """
 import asyncio
 import email
+import tempfile
 import json
 import logging
 from email import policy
@@ -28,7 +29,7 @@ KEK = generate_kek()
 
 @pytest.fixture
 def settings(pg_url):
-    return Settings(database_url=pg_url, mode="live", model_provider="scripted", internal_token="test-internal-token",
+    return Settings(database_url=pg_url, mode="live", model_provider="scripted", internal_token="test-internal-token", artifact_dir=tempfile.mkdtemp(),
                     tool_timeout_seconds=5, broker_kek=KEK, google_client_id="test-client", google_client_secret="test-secret")
 
 
@@ -271,6 +272,34 @@ async def test_reply_threads_with_original(client, fake, make_worker):
     [sent] = fake.sent()
     msg = email.message_from_bytes(sent["raw"], policy=policy.default)
     assert sent["threadId"] == "th1" and msg["In-Reply-To"] == "<a1@partner.example>" and msg["References"] == "<a1@partner.example>"
+
+
+async def test_reply_with_attachment_goes_through_the_upload_endpoint(client, fake, make_worker, sessionmaker):
+    conn, _ = await connect_google(client, fake, {"gmail": "read_write", "calendar": "off"})
+    content = "# Brief\n\nTier B is $40.\n"
+    doc = (await client.post("/api/artifacts/markdown", json={"name": "brief", "content": content})).json()
+    ref = [{"artifact_id": doc["id"], "version": doc["current"]["version"]}]
+    task_id, w = await run_task(client, make_worker, [{"tool_calls": [send_call(conn["id"], subject="Re: Agenda for Thursday", in_reply_to_message_id="g1",
+                                                                                  attachments=ref)]}, {"text": "Sent."}])
+    ap = await pending_approval(client)
+    assert ap["preview"]["payload"]["attachments"][0]["sha256"] == doc["current"]["sha256"]
+    await _approve_and_run(client, w)
+    assert (await task_state(client, task_id))["state"] == "succeeded"
+    [sent] = fake.sent()
+    assert sent["uploaded"] is True and sent["threadId"] == "th1"
+    msg = email.message_from_bytes(sent["raw"], policy=policy.default)
+    assert msg["In-Reply-To"] == "<a1@partner.example>"
+    assert msg.get_body(("plain",)).get_content().strip() == "Hi Priya, the metrics are attached below.\n42"
+    [att] = list(msg.iter_attachments())
+    assert (att.get_filename(), att.get_content_type()) == (doc["name"], doc["mime"])
+    assert att.get_payload(decode=True) == content.encode()
+
+
+async def test_text_only_email_still_uses_the_plain_endpoint(client, fake, make_worker):
+    conn, _ = await connect_google(client, fake, {"gmail": "read_write", "calendar": "off"})
+    _, w = await run_task(client, make_worker, [{"tool_calls": [send_call(conn["id"], attachments=[])]}, {"text": "Sent."}])
+    await _approve_and_run(client, w)
+    assert [s["uploaded"] for s in fake.sent()] == [False]
 
 
 @pytest.mark.parametrize("kind, state", [("500_after", "unknown"), ("timeout_after", "unknown"), ("connect_error", "failed")])

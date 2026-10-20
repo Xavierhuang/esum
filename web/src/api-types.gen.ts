@@ -1430,7 +1430,8 @@ export interface components {
              * Decision
              * @enum {string}
              */
-            decision: "allow_once" | "deny";
+            decision: "allow_once" | "edit_and_allow" | "deny" | "skip";
+            edits?: components["schemas"]["EditsIn"] | null;
             /** Expected Args Hash */
             expected_args_hash: string;
         };
@@ -1489,6 +1490,13 @@ export interface components {
             content: string;
             /** Expected Version */
             expected_version: number;
+        };
+        /** EditsIn */
+        EditsIn: {
+            /** Body */
+            body?: string | null;
+            /** Subject */
+            subject?: string | null;
         };
         /** ExportOut */
         ExportOut: {

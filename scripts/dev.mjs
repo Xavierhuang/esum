@@ -1,4 +1,4 @@
-// One command to run the app locally in demo mode: `npm run dev` (or `node scripts/dev.mjs`).
+// One command to run the app locally (demo mode by default; live mode via server/.env): `npm run dev` (or `node scripts/dev.mjs`).
 // Builds the web app when its sources changed, then starts the database and every service (server/scripts/dev.py).
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";

@@ -105,7 +105,9 @@ export function subscribe(onEvent: (type: string) => void): () => void {
 
 export type Mode = "off" | "read_only" | "read_write";
 export interface PreviewField { label: string; value: string; before?: string; multiline?: boolean }
-export interface Preview { title: string; tool: string; fields: PreviewField[]; side_effects: string; payload: Record<string, unknown> }
+export interface Preview { title: string; tool: string; fields: PreviewField[]; side_effects: string; payload: Record<string, unknown>; edited_by_owner?: boolean }
+/** allow_once and edit_and_allow approve; skip refuses one item and lets the task continue; deny stops the task. */
+export type Decision = "allow_once" | "edit_and_allow" | "skip" | "deny";
 export interface Approval {
   id: string; state: string; expires_at: string; decided_at: string | null; reason: string | null; args_hash: string;
   action_id: string; action_state: string; task_id: string; task_intent: string; account: string; preview: Preview; effect: "read" | "write";
@@ -124,8 +126,8 @@ export interface Connection {
 
 export const api2 = {
   approvals: () => req<Approval[]>("GET", "/api/approvals"),
-  decide: (a: Approval, decision: "allow_once" | "deny") =>
-    req<{ approval: Approval; outcome: string }>("POST", `/api/approvals/${a.id}/decision`, { decision, expected_args_hash: a.args_hash }),
+  decide: (a: Approval, decision: Decision, edits?: { subject?: string; body?: string }) =>
+    req<{ approval: Approval; outcome: string }>("POST", `/api/approvals/${a.id}/decision`, { decision, expected_args_hash: a.args_hash, edits: edits ?? null }),
   unknownActions: () => req<Action[]>("GET", "/api/actions?state=unknown"),
   reconcile: (id: string) => req<Action>("POST", `/api/actions/${id}/reconcile`),
   resolve: (id: string, outcome: "happened" | "did_not_happen") => req<Action>("POST", `/api/actions/${id}/resolve`, { outcome }),

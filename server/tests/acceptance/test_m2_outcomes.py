@@ -172,7 +172,8 @@ async def test_gmail01_sensitive_mail_is_withheld_and_bodies_marked_untrusted(cl
     results = [json.loads(r["content"]) for r in await tool_results(sessionmaker, task_id)]
     search, otp, normal = results
     assert search["data"]["filtered_count"] == 2
-    assert {m["id"] for m in search["data"]["messages"]} == {"m001", "m002", "m004"}
+    ids = {m["id"] for m in search["data"]["messages"]}
+    assert {"m001", "m002", "m004"} <= ids and not ids & {"m003", "m005"}  # the inbox has more demo mail; the two sensitive ones are withheld
     assert all(m["snippet"]["untrusted"] is True for m in search["data"]["messages"])
     assert otp["error"]["code"] == "permission_denied"
     assert normal["data"]["message"]["body"]["untrusted"] is True

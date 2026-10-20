@@ -22,7 +22,7 @@ from opa.sdk.contract import ConnectorError
 
 MAX_ATTACHMENTS = 10
 MAX_TOTAL_BYTES = 20 * 1024 * 1024
-SUPPORTED_PROVIDERS = ("fixture",)  # the Gmail adapter gains MIME attachments when M3 merges
+SUPPORTED_PROVIDERS = ("fixture", "google")
 
 
 async def _load(db: AsyncSession, owner_id: str, artifact_id: str, version: int):
@@ -58,6 +58,22 @@ async def resolve(db: AsyncSession, owner_id: str, refs: list[dict[str, Any]], p
         out.append({"artifact_id": art.id, "version": ver.version, "name": art.name, "mime": art.mime, "size": ver.size, "sha256": ver.sha256})
     if total > MAX_TOTAL_BYTES:
         raise ConnectorError("invalid_input", "attachments exceed 20 MiB in total")
+    return out
+
+
+async def approved_bytes(db: AsyncSession, settings: Settings, owner_id: str, attachments: list[dict[str, Any]]) -> list[bytes]:
+    """The bytes to send, read once more and checked against the approved digests (after `verify`, at dispatch)."""
+    store = ArtifactStore(settings.artifact_dir)
+    out: list[bytes] = []
+    for a in attachments:
+        _, ver = await _load(db, owner_id, a["artifact_id"], a["version"])
+        try:
+            data = store.read(ver.storage_key) if ver is not None else b""
+        except (StorageError, OSError):
+            data = b""
+        if ver is None or sha256_bytes(data) != a["sha256"]:
+            raise ConnectorError("approval_required", f"the attachment {a['name']} does not match the approved bytes")
+        out.append(data)
     return out
 
 

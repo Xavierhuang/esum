@@ -10,7 +10,7 @@
 ![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)
 ![React 18](https://img.shields.io/badge/react-18-61DAFB?logo=react&logoColor=black)
 ![PostgreSQL 16](https://img.shields.io/badge/postgres-16-4169E1?logo=postgresql&logoColor=white)
-![Tests: 269 passing](https://img.shields.io/badge/tests-269%20passing-2ea44f)
+![Tests: 281 passing](https://img.shields.io/badge/tests-281%20passing-2ea44f)
 ![Release gates: 10/10](https://img.shields.io/badge/release%20gates-10%2F10-2ea44f)
 [![Built with LingCode](https://img.shields.io/badge/built%20with-LingCode-8A2BE2)](https://lingcode.dev)
 
@@ -34,9 +34,9 @@ The whole project (requirements, technical design, backend, frontend, tests, and
 |---|---|
 | 🐍 **~12,000 lines** of Python backend | FastAPI · PostgreSQL · six isolated services |
 | ⚛️ **~1,900 lines** of React frontend | Chat-first, passes automated accessibility checks (axe-core) |
-| 🧪 **269 automated tests** | Plus mutation checks: each safety rule was deliberately broken to prove a test catches it |
+| 🧪 **281 automated tests** | Plus mutation checks: each safety rule was deliberately broken to prove a test catches it |
 | ✅ **10/10 release gates** | Locked dependencies, linting, migrations, secret scanning, browser smoke tests, fresh install verification, and more |
-| 🧩 **10 skills** | Gmail · Calendar · Drive · Notion · GitHub · Files · Memory · Automations · Browser · Daily brief |
+| 🧩 **11 skills** | Gmail · Calendar · Drive · Notion · GitHub · Files · Memory · Automations · Browser · Daily brief · Inbox triage |
 
 ### 📸 Screenshots
 
@@ -48,6 +48,7 @@ The whole project (requirements, technical design, backend, frontend, tests, and
 
 ### 🧩 Features
 
+- **📥 Inbox triage** — "Go through my inbox" sorts new mail into *needs your reply*, *FYI*, and *can ignore*, then drafts replies in your tone. Each draft is a card: **Allow once**, **Edit** it first, or **Skip** it and move on.
 - **💬 Chat is the interface** — Connect, modify access, reconnect, or disconnect accounts simply by asking; confirmation cards appear directly inside the chat.
 - **📧 Gmail / 📅 Google Calendar** — Search, read, and summarize; draft emails and event updates that are sent only after you explicitly approve them.
 - **📂 Google Drive · 📝 Notion · 🐙 GitHub** — Read-only access to documents, pages, databases, repositories, issues, and pull requests.
@@ -71,4 +72,67 @@ The whole project (requirements, technical design, backend, frontend, tests, and
 **Prerequisites:** [uv](https://docs.astral.sh/uv/) and Node 20+ (with npm). The database is embedded and starts automatically.
 
 ```sh
-git clone [https://github.com/lingcode-dev/esum.git](https://github.com/lingcode-dev/esum.git) esum && cd esum
+git clone https://github.com/lingcode-dev/esum.git esum && cd esum
+```
+
+**1. Install** (every version is locked; the release check runs this block verbatim in an empty copy of the repository):
+
+<!-- fresh-install:begin -->
+```sh
+cd server
+uv sync --frozen --extra dev --extra browser
+.venv/bin/playwright install chromium
+cd ../web
+npm ci
+npm run build
+cd ..
+```
+<!-- fresh-install:end -->
+
+**2. Run** (one command starts the database and every service):
+
+```sh
+npm run dev          # or: node scripts/dev.mjs
+```
+
+Open **http://127.0.0.1:8080**, sign in with `demo@example.com` / `demo-password-123`, and say "**Connect my accounts**", then "**Go through my inbox**". Press `Ctrl-C` to stop; your data is kept in `server/data/`.
+
+> Demo mode uses a sample mailbox, calendar, and documents, and the assistant's replies are scripted; **no real service is contacted**. In LingCode, just press **Run**.
+
+### 🔌 Use your real Gmail and Claude
+
+1. Copy the local settings: `cp server/.env.example server/.env`
+2. Fill in `OPA_ANTHROPIC_API_KEY`, and a Google OAuth client in `OPA_GOOGLE_CLIENT_ID` / `OPA_GOOGLE_CLIENT_SECRET` (step by step in the [operations guide](docs/OPERATIONS.md#use-your-real-accounts)).
+3. Run `npm run dev` again. It starts in live mode with its own database, so demo data never mixes with yours.
+4. Say "**Connect my Google account**", then "**Go through my inbox and draft replies**". To get this every morning, say "**Every weekday at 8:00, go through my inbox and draft replies**" and confirm the automation.
+
+### ☁️ Deploy (Docker Compose)
+
+On any machine with Docker:
+
+```sh
+cp .env.example .env                 # set the three database passwords and OPA_INTERNAL_TOKEN
+server/.venv/bin/opa generate-kek    # paste the output into OPA_BROKER_KEK in .env
+docker compose --env-file .env -f deploy/compose.yaml up --build -d
+docker compose --env-file .env -f deploy/compose.yaml run --rm api opa bootstrap-owner you@example.com
+```
+
+The app listens on `127.0.0.1:8080` only. To reach it from elsewhere (for example, so people can open your share links), put it behind an **HTTPS reverse proxy** and set `OPA_SECURE_COOKIES=true` and `OPA_PUBLIC_BASE_URL=https://your-domain`. Backups, restore, running the services yourself, and upgrades are in the [operations guide](docs/OPERATIONS.md).
+
+### 📊 Status: v0.3 preview
+
+To be straight about it: every feature passes the automated tests, but **the real Google, Notion, GitHub, and Claude APIs have not been exercised live yet** (tests use fakes built to the providers' published contracts), and **the Docker Compose deployment has not yet been run on a real Docker host**. Details in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). Try it, open issues, and send pull requests!
+
+### 📚 Docs
+
+[Operations guide](docs/OPERATIONS.md) · [Writing skills](docs/skills.md) · [Technical design](docs/tech-design.md) · [Requirements](docs/open-muse-implementation-requirements.md) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
+
+---
+
+<div align="center">
+
+**esum** is an independent open-source project. It is not affiliated with or endorsed by Meta, and it is not an implementation of any Meta product.
+
+Apache-2.0 · Made with ❤️ and [LingCode](https://lingcode.dev)
+
+</div>

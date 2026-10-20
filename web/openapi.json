@@ -1181,10 +1181,22 @@
           "decision": {
             "enum": [
               "allow_once",
-              "deny"
+              "edit_and_allow",
+              "deny",
+              "skip"
             ],
             "title": "Decision",
             "type": "string"
+          },
+          "edits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EditsIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "expected_args_hash": {
             "title": "Expected Args Hash",
@@ -1369,6 +1381,34 @@
           "content"
         ],
         "title": "EditIn",
+        "type": "object"
+      },
+      "EditsIn": {
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "title": "EditsIn",
         "type": "object"
       },
       "ExportOut": {

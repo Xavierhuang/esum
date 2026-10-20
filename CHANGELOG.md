@@ -2,6 +2,21 @@
 
 All notable changes are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased (v0.3 inbox triage)
+
+### Added
+- **Inbox triage:** "Go through my inbox" sorts unread mail from the last day into needs your reply, FYI, and can ignore, posts that summary in the chat, then drafts up to five replies, one approval card at a time. Replies go only to the sender of the email they answer and follow the owner's tone from earlier messages in the thread. Anything that needs the owner's decision is listed, not drafted. See the `inbox-triage` skill.
+- **Edit before sending:** email approval cards have an Edit button for the subject and body. The edited email becomes a new action with its own hash, approved in the same click. The assistant's original draft stays in the ledger as proposed, and the assistant is told the owner changed it.
+- **Skip:** every approval card can skip one item. The task carries on with the rest, where Deny still stops it.
+- **`post_update` core tool:** the assistant can post a message to the chat and keep working. Approval cards now appear under a task's latest message, so a summary comes before its drafts.
+- **Gmail attachments for real Google accounts:** approved files are sent through Gmail's multipart upload endpoint, re-checked against their approved SHA-256 at dispatch.
+- **Live mode from `npm run dev`:** set `OPA_MODE=live` in `server/.env` (see `server/.env.example`). Live data is kept apart from the demo's, and a broker key is created on first run.
+- **Scripted demo replies:** demo mode now walks through connecting the demo account, inbox triage, and reading Notion notes, and explains how to switch to live mode for anything else.
+- The demo mailbox has a realistic unread inbox, and its search understands `is:`, `category:`, `label:`, `newer_than:`, `older_than:`, `after:`, `before:`, and `-` negation.
+
+### Changed
+- The default model is `claude-opus-5-5`.
+
 ## Unreleased (v0.2 connectors)
 
 ### Added

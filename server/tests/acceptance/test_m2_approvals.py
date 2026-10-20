@@ -231,7 +231,7 @@ async def test_always_ask_requires_approval_for_reads(client, make_worker, sessi
     assert await w.run_once()
     assert (await task_state(client, sub["task_id"]))["state"] == "succeeded"
     data = json.loads((await tool_results(sessionmaker, sub["task_id"]))[-1]["content"])["data"]
-    assert data["filtered_count"] == 2 and len(data["messages"]) == 2
+    assert data["filtered_count"] == 2 and len(data["messages"]) == 8  # first page of 10: two sign-in mails withheld
 
 
 async def test_a14_other_owner_cannot_touch_approvals_or_connections(app, client, other_owner, make_worker):

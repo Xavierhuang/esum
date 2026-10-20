@@ -11,6 +11,7 @@ from opa.api.actions_service import invalidate_actions
 from opa.api.deps import ClockDep, DbDep, OwnerDep, get_owned
 from opa.api.tasks_service import requeue, transition
 from opa.broker.ops import get_tool
+from opa.broker.ops import preview as ops_preview
 from opa.core.canonical import args_hash
 from opa.core.errors import Conflict, Invalid, NotFound
 from opa.db.models import Action, Approval, AuditLog, Connection, Task
@@ -36,14 +37,28 @@ class ApprovalOut(BaseModel):
     effect: str
 
 
+class EditsIn(BaseModel):
+    subject: str | None = None
+    body: str | None = None
+
+
 class DecisionIn(BaseModel):
-    decision: Literal["allow_once", "deny"]
+    # allow_once: approve exactly what was shown. edit_and_allow: approve the owner's edited version (email only).
+    # deny: refuse and stop the task. skip: refuse this one and let the task continue with the rest.
+    decision: Literal["allow_once", "edit_and_allow", "deny", "skip"]
     expected_args_hash: str
+    edits: EditsIn | None = None
 
 
 class DecisionOut(BaseModel):
     approval: ApprovalOut
-    outcome: str  # approved | denied | unchanged | expired | invalidated
+    outcome: str  # approved | denied | skipped | unchanged | expired | invalidated
+
+
+# Fields the owner may rewrite before approving. Recipients are deliberately not editable here: a
+# different recipient is a different email, so the owner asks the assistant for a new proposal.
+EDITABLE = {"gmail.send_message": ("subject", "body")}
+MAX_EDITED_BODY = 100_000
 
 
 class ActionOut(BaseModel):
@@ -69,6 +84,41 @@ async def _out(db, ap: Approval) -> ApprovalOut:
     return ApprovalOut(id=ap.id, state=ap.state, expires_at=ap.expires_at, decided_at=ap.decided_at, reason=ap.reason, args_hash=ap.args_hash,
                        action_id=action.id, action_state=action.state, task_id=task.id, task_intent=task.intent, account=conn.account_label if conn else "Web browser",
                        preview=action.preview, effect=action.effect)
+
+
+async def _replace_with_owner_edit(db, owner_id: str, task: Task, action: Action, ap: Approval, edits: EditsIn | None, now: datetime) -> tuple[Action, Approval]:
+    """The owner's edited version becomes a new pending action; the original stays recorded as proposed.
+    Actions are immutable, so the edit never rewrites the payload the assistant proposed."""
+    fields = EDITABLE.get(action.tool_name)
+    if fields is None:
+        raise Invalid("only emails can be edited before approval", code="not_editable")
+    changes = {k: v for k, v in (edits.model_dump() if edits else {}).items() if k in fields and v is not None}
+    if "subject" in changes and ("\n" in changes["subject"] or "\r" in changes["subject"] or len(changes["subject"]) > 998):
+        raise Invalid("the subject must be one line of at most 998 characters", code="invalid_input")
+    if len(changes.get("body", "")) > MAX_EDITED_BODY:
+        raise Invalid(f"the body must be at most {MAX_EDITED_BODY} characters", code="invalid_input")
+    canonical = {**action.canonical_args, **changes}
+    if canonical == action.canonical_args:
+        return action, ap  # nothing changed: approve what was shown
+    conn = await db.get(Connection, action.connection_id)
+    preview = ops_preview(action.tool_name, canonical, account=conn.account_label)
+    preview["edited_by_owner"] = True
+    new_hash = args_hash(action.tool_name, action.tool_version, canonical)
+    reason = "replaced by the version you edited"
+    action.state, action.resolution, action.error = "cancelled", "edited_by_owner", {"code": "superseded", "message": reason}
+    ap.state, ap.reason, ap.decided_at = "invalidated", reason, now
+    edited = Action(owner_id=owner_id, task_id=task.id, tool_use_id=f"{action.tool_use_id}:edited"[:128], connection_id=action.connection_id,
+                    tool_name=action.tool_name, tool_version=action.tool_version, effect=action.effect, canonical_args=canonical,
+                    args_hash=new_hash, preview=preview, state="awaiting_approval", provider_idempotency_key=action.provider_idempotency_key)
+    db.add(edited)
+    await db.flush()
+    edited_ap = Approval(owner_id=owner_id, action_id=edited.id, task_id=task.id, args_hash=new_hash, state="pending", expires_at=ap.expires_at)
+    db.add(edited_ap)
+    await db.flush()
+    task.checkpoint = {**task.checkpoint, "pending_action": {**task.checkpoint["pending_action"], "action_id": edited.id}}
+    db.add(AuditLog(owner_id=owner_id, actor="owner", type="approval.edited", subject_id=edited.id,
+                    sanitized={"tool": action.tool_name, "replaces": action.id, "fields": sorted(changes), "args_hash": new_hash}))
+    return edited, edited_ap
 
 
 def _action_out(a: Action) -> ActionOut:
@@ -119,11 +169,17 @@ async def decide(approval_id: str, body: DecisionIn, db: DbDep, owner: OwnerDep,
     if task.state != "waiting_approval" or task.checkpoint.get("pending_action", {}).get("action_id") != action.id:
         return await invalidate("the task is no longer waiting for this approval", "stale_approval")
 
-    if body.decision == "deny":
+    if body.decision in ("deny", "skip"):
         ap.state, ap.decided_at = "denied", now
         action.state = "denied"
-        db.add(AuditLog(owner_id=owner.id, actor="owner", type="approval.denied", subject_id=action.id, sanitized={"tool": action.tool_name}))
-        await emit(db, owner.id, "approval.decided", {"approval_id": ap.id, "decision": "deny"}, task_id=task.id, action_id=action.id)
+        if body.decision == "skip":
+            action.resolution = "skipped"
+        db.add(AuditLog(owner_id=owner.id, actor="owner", type=f"approval.{'skipped' if body.decision == 'skip' else 'denied'}", subject_id=action.id,
+                        sanitized={"tool": action.tool_name}))
+        await emit(db, owner.id, "approval.decided", {"approval_id": ap.id, "decision": body.decision}, task_id=task.id, action_id=action.id)
+        if body.decision == "skip":  # the assistant hears it was skipped and carries on with the rest of the task
+            await requeue(db, task, clock)
+            return DecisionOut(approval=await _out(db, ap), outcome="skipped")
         await transition(db, task, "blocked", clock, blocker_code="approval_denied", blocker_detail="you denied the proposed action; resume to let the assistant continue without it")
         return DecisionOut(approval=await _out(db, ap), outcome="denied")
 
@@ -133,10 +189,12 @@ async def decide(approval_id: str, body: DecisionIn, db: DbDep, owner: OwnerDep,
         mode = conn.modes.get(capability, "off")
         if conn.status != "connected" or mode == "off" or (action.effect == "write" and mode != "read_write"):
             return await invalidate(f"{conn.account_label} no longer allows this action", "permission_changed")
+    if body.decision == "edit_and_allow":
+        action, ap = await _replace_with_owner_edit(db, owner.id, task, action, ap, body.edits, now)
     ap.state, ap.decided_at = "approved", now
     action.state = "approved"
     db.add(AuditLog(owner_id=owner.id, actor="owner", type="approval.granted", subject_id=action.id, sanitized={"tool": action.tool_name, "args_hash": ap.args_hash}))
-    await emit(db, owner.id, "approval.decided", {"approval_id": ap.id, "decision": "allow_once"}, task_id=task.id, action_id=action.id)
+    await emit(db, owner.id, "approval.decided", {"approval_id": ap.id, "decision": body.decision}, task_id=task.id, action_id=action.id)
     await requeue(db, task, clock)
     return DecisionOut(approval=await _out(db, ap), outcome="approved")
 

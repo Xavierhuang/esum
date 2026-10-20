@@ -221,8 +221,27 @@ class FakeGoogle:
             return _err(403, "Request had insufficient authentication scopes.", "insufficientPermissions")
         return None
 
+    @staticmethod
+    def _multipart_upload(request: httpx.Request) -> tuple[dict[str, Any], bytes] | None:
+        """uploadType=multipart: exactly a JSON metadata part, then a message/rfc822 part (Gmail upload guide)."""
+        ctype = request.headers.get("content-type", "")
+        if request.url.params.get("uploadType") != "multipart" or not ctype.startswith("multipart/related; boundary="):
+            return None
+        sep = b"--" + ctype.split("boundary=", 1)[1].encode()
+        chunks = request.content.split(sep)
+        if len(chunks) != 4 or chunks[0] != b"" or chunks[3] != b"--\r\n":
+            return None
+        parts = []
+        for chunk in chunks[1:3]:
+            head, _, body = chunk.removeprefix(b"\r\n").partition(b"\r\n\r\n")
+            parts.append((head.decode().lower(), body.removesuffix(b"\r\n")))
+        if parts[0][0] != "content-type: application/json; charset=utf-8" or parts[1][0] != "content-type: message/rfc822":
+            return None
+        return json.loads(parts[0][1]), parts[1][1]
+
     def _gmail(self, request: httpx.Request, tok: dict[str, Any]) -> httpx.Response:
-        path = request.url.path.removeprefix("/gmail/v1/users/me")
+        upload = request.url.path == "/upload/gmail/v1/users/me/messages/send"
+        path = "/messages/send" if upload else request.url.path.removeprefix("/gmail/v1/users/me")
         params = request.url.params
         if path == "/messages/send" and request.method == "POST":
             if (denied := self._need(tok, GMAIL_SEND)):
@@ -230,15 +249,22 @@ class FakeGoogle:
             kind = self._take_fault("send")
             if kind == "connect_error":
                 raise httpx.ConnectError("connection refused", request=request)
-            body = json.loads(request.content)
-            raw = base64.urlsafe_b64decode(body["raw"] + "=" * (-len(body["raw"]) % 4))
+            if upload:
+                got = self._multipart_upload(request)
+                if got is None:
+                    return _err(400, "Invalid multipart upload")
+                body, raw = got
+            else:
+                body = json.loads(request.content)
+                raw = base64.urlsafe_b64decode(body["raw"] + "=" * (-len(body["raw"]) % 4))
             parsed = message_from_bytes(raw, policy=policy.default)
             mid = f"g{self.next_msg}"
             self.next_msg += 1
             headers = [{"name": k, "value": str(v)} for k, v in parsed.items() if k.lower() != "bcc"]
+            text_part = parsed.get_body(("plain",)) or parsed
             self.messages[mid] = {"id": mid, "threadId": body.get("threadId") or f"th{mid}", "labelIds": ["SENT"], "snippet": "",
-                                  "payload": {"mimeType": "text/plain", "headers": headers, "body": {"data": _b64(parsed.get_content().encode())}},
-                                  "raw": raw, "bcc": str(parsed.get("Bcc", ""))}
+                                  "payload": {"mimeType": "text/plain", "headers": headers, "body": {"data": _b64(text_part.get_content().encode())}},
+                                  "raw": raw, "bcc": str(parsed.get("Bcc", "")), "uploaded": upload}
             if kind == "500_after":
                 return _err(500, "Backend Error", "backendError")
             if kind == "timeout_after":

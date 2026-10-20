@@ -13,7 +13,7 @@ This document turns the requirements into concrete components, schemas, algorith
 | Web UI | React 18, TypeScript, Vite, TanStack Query, React Router | Spec default; generated API types from OpenAPI |
 | API / worker / broker / browser service | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 (async), Alembic | Spec default; one language for all services and the SDK |
 | Database | PostgreSQL 16 | Spec; also used as job queue, event outbox, and full-text index |
-| Model | Anthropic SDK, `claude-opus-5` default, scripted adapter for tests | One real provider adapter plus deterministic adapter (DEV-01) |
+| Model | Anthropic SDK, `claude-opus-5-5` default, scripted adapter for tests | One real provider adapter plus deterministic adapter (DEV-01) |
 | Browser | Playwright (Python) driving Chromium, behind an egress proxy | Live view and takeover via CDP; proxy enforces WEB-01 |
 | Auth | argon2-cffi hashes, server-side sessions, Authlib for Google OAuth | AUTH-01, CON-01 |
 | Files | Local volume `/data/artifacts`, content-addressed by SHA-256 | ART-01 |
@@ -389,7 +389,7 @@ Interface: `generate(messages, tools, limits) -> GenerateResult(text, tool_calls
 
 Anthropic adapter, from the Claude API reference:
 
-- Default model `claude-opus-5`; operator can set `MODEL_ID`. `max_tokens` 16000, non-streaming (tool inputs here are small).
+- Default model `claude-opus-5-5`; operator can set `MODEL_ID`. `max_tokens` 16000, non-streaming (tool inputs here are small).
 - Omit `thinking` so adaptive thinking applies; `output_config.effort` from settings, default `high`. Never send `budget_tokens`.
 - Every tool definition has `strict: true`, `additionalProperties: false`, and a `required` list, generated from the Pydantic input model.
 - `tool_choice` is left on `auto`; the system prompt names the expected tool when one is required. Never use forced tool choice.
@@ -445,7 +445,7 @@ Scripted adapter: loads a YAML script keyed by step number with fixed tool calls
 1. **Screencast versus VNC.** Design uses CDP screencast for simplicity. If input fidelity during takeover proves poor (drag, IME), switch to noVNC in the browser container; the WebSocket route stays the same.
 2. **WeasyPrint system dependencies** add ~150 MB to the image. Alternative is reportlab with a smaller feature set. Decide at M4. Decided in §20: reportlab.
 3. **Data-sharing detection heuristic** in 9.2 is intentionally crude. Accept false positives in v0.1 and tune with fixtures.
-4. **Model choice.** `claude-opus-5` is the default for capability. Operators wanting lower cost can set `claude-sonnet-5`; no automatic downgrade.
+4. **Model choice.** `claude-opus-5-5` is the default for capability. Operators wanting lower cost can set `claude-sonnet-5-5`; no automatic downgrade.
 
 ---
 

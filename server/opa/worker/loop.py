@@ -277,6 +277,13 @@ class Worker:
                     if call.name == "ask_user":
                         ask_user = str(call.input.get("question", "")) or "Could you clarify?"
                         results.append({"type": "tool_result", "tool_use_id": call.id, "content": "question delivered to the owner; wait for the reply"})
+                    elif call.name == "post_update":
+                        update_text = str(call.input.get("text", "")).strip()
+                        if not update_text:
+                            results.append(self._err(call.id, "invalid_input", "text is required"))
+                        else:
+                            await self._post_update(task_id, token, update_text[:20_000])
+                            results.append({"type": "tool_result", "tool_use_id": call.id, "content": "posted to the chat; keep working"})
                     elif call.name in broker_tools:
                         info = broker_tools[call.name]
                         args = dict(call.input)
@@ -377,14 +384,19 @@ class Worker:
                 raise Blocked("unknown_external_outcome", "the connector service failed during dispatch; reconcile before resuming") from None
             if res.status == "unknown":
                 raise Blocked("unknown_external_outcome", "the provider may or may not have applied this change; check it before resuming")
+            data = res.data
+            if action.preview.get("edited_by_owner") and isinstance(data, dict):
+                data = {**data, "note": "the owner edited this before approving; what was sent is their version, not your draft"}
             return {"type": "tool_result", "tool_use_id": tid, "is_error": res.status != "succeeded",
-                    "content": _result_text(res.status, res.data, res.error.model_dump() if res.error else None)}
+                    "content": _result_text(res.status, data, res.error.model_dump() if res.error else None)}
         if action.state == "succeeded":
             return {"type": "tool_result", "tool_use_id": tid, "content": _result_text("succeeded", action.result)}
         if action.state in ("dispatching", "unknown"):
             raise Blocked("unknown_external_outcome", "an earlier change has an unknown outcome; reconcile before resuming")
         if action.state == "awaiting_approval":
             raise Blocked("approval_pending", "still waiting for the owner's decision")
+        if action.state == "denied" and action.resolution == "skipped":
+            return self._err(tid, "skipped_by_owner", "the owner skipped this one: it was not done; do not propose it again, and continue with the rest of the task")
         messages = {
             "failed": (action.error or {}).get("message", "the change failed"),
             "denied": "the owner denied this action; do not retry it unless the owner asks",
@@ -452,6 +464,14 @@ class Worker:
                 conv = await db.get(Conversation, task.conversation_id)
                 await add_message(db, conv, "assistant", ask_user, task_id=task.id)
                 await transition(db, task, "waiting_user", self.clock, notify=("Needs your input", ask_user[:120]))
+
+    async def _post_update(self, task_id: str, token: str, text_: str) -> None:
+        """A progress message in the task's conversation; the task keeps running."""
+        async with self.sm() as db, db.begin():
+            await self._fenced(db, task_id, token)
+            task = await db.get(Task, task_id)
+            conv = await db.get(Conversation, task.conversation_id)
+            await add_message(db, conv, "assistant", text_, task_id=task.id)
 
     async def _finish(self, task_id: str, token: str, state: dict[str, Any], final_text: str) -> None:
         async with self.sm() as db, db.begin():

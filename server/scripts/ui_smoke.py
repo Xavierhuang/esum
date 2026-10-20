@@ -24,6 +24,18 @@ DIST = ROOT.parent / "web" / "dist"
 EMAIL, PASSWORD, PORT, BROKER_PORT, BROWSER_PORT, WEB_PROXY_PORT = "ui@example.com", "ui-smoke-password-123", 8098, 8097, 8096, 3139
 SCRIPT = """
 match:
+  - contains: "Go through my inbox"
+    steps:
+      - tool_calls:
+          - name: post_update
+            input: {text: "Your inbox: 2 need a reply."}
+      - tool_calls:
+          - name: gmail__send_message
+            input: {connection_id: "@auto", to: [lena@acme-client.example], cc: [], bcc: [], subject: "Re: Call on Friday", body: "Monday works.", in_reply_to_message_id: m021}
+      - tool_calls:
+          - name: gmail__send_message
+            input: {connection_id: "@auto", to: [jordan@friend.example], cc: [], bcc: [], subject: "Re: Coffee next week?", body: "Wednesday works.", in_reply_to_message_id: m023}
+      - text: Inbox done.
   - contains: "Email Priya"
     steps:
       - tool_calls:
@@ -253,7 +265,7 @@ def _m2(page, snap) -> None:
         expect(card.get_by_text("Hi Priya, here are the metrics.")).to_be_visible()
         expect(card.get_by_text("Sent email cannot be recalled", exact=False)).to_be_visible()
         snap(page, "6-approval-card")
-        card.get_by_role("button", name="Deny").focus()
+        card.get_by_role("button", name="Edit").focus()
         page.keyboard.press("Shift+Tab")  # keyboard-only: move to Allow once and press Enter
         expect(card.get_by_role("button", name="Allow once")).to_be_focused()
         page.keyboard.press("Enter")
@@ -261,6 +273,24 @@ def _m2(page, snap) -> None:
         print("PASS approval card in the chat shows exact recipients and body; allowed with keyboard only")
 
         expect(page.get_by_role("list", name="Messages").get_by_text("Sent the email to Priya.")).to_be_visible(timeout=10_000)
+
+        # ---- v0.3 inbox triage: the summary comes first; edit one draft and send it, skip the other
+        expect(page.get_by_role("button", name="Send")).to_be_enabled()
+        page.get_by_role("textbox", name="Message").fill("Go through my inbox")
+        page.keyboard.press("Enter")
+        msgs = page.get_by_role("list", name="Messages")
+        expect(msgs.get_by_text("Your inbox: 2 need a reply.")).to_be_visible(timeout=10_000)
+        draft = page.get_by_role("article", name="Send email")
+        expect(draft.get_by_text("lena@acme-client.example")).to_be_visible(timeout=10_000)
+        draft.get_by_role("button", name="Edit").click()
+        draft.get_by_label("Body").fill("Tuesday at 2pm works better. Talk then!")
+        snap(page, "8a-edit-draft")
+        draft.get_by_role("button", name="Approve edited version").click()
+        expect(draft.get_by_text("jordan@friend.example")).to_be_visible(timeout=10_000)
+        draft.get_by_role("button", name="Skip").click()
+        expect(msgs.get_by_text("Inbox done.")).to_be_visible(timeout=10_000)
+        expect(draft).to_have_count(0)
+        print("PASS inbox triage: summary first, an edited draft approved, the next draft skipped and the task finished")
 
         # ---- v0.2 sharing: a read-only snapshot link, opened by someone who is not signed in
         page.get_by_role("button", name="Share").click()

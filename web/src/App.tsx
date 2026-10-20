@@ -158,6 +158,7 @@ function Shell({ me: initialMe, onLogout }: { me: Me; onLogout: () => void }) {
 }
 
 const SUGGESTIONS = [
+  "Go through my inbox and draft replies",
   "Connect my Google account",
   "What's on my calendar today?",
   "Summarize my Notion meeting notes",
@@ -189,6 +190,8 @@ function Chat({ tick, focusConv, announce, onOpenFile }: { tick: number; focusCo
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages.length, approvals.length]);
 
   const waiting = Object.values(tasks).filter((t) => t.state === "waiting_user" && t.conversation_id === active);
+  const lastOfTask: Record<string, number> = {};
+  messages.forEach((m, i) => { if (m.task_id) lastOfTask[m.task_id] = i; });
 
   return (
     <section className="chat" aria-labelledby="chat-h">
@@ -222,9 +225,10 @@ function Chat({ tick, focusConv, announce, onOpenFile }: { tick: number; focusCo
         </div>
       )}
       <ol className="messages" aria-label="Messages">
-        {messages.map((m) => {
+        {messages.map((m, i) => {
           const t = m.task_id ? tasks[m.task_id] : undefined;
-          const asks = m.role === "user" && m.task_id ? approvals.filter((a) => a.task_id === m.task_id) : [];
+          // A task's approval cards follow its latest message, so a summary it posted comes before its drafts.
+          const asks = m.task_id && lastOfTask[m.task_id] === i ? approvals.filter((a) => a.task_id === m.task_id) : [];
           return (<Fragment key={m.id}>
             <li className={`msg ${m.role}${m.connection_request ? " has-card" : ""}`}>
               <h3 className="sr-only">{m.role === "user" ? "You" : m.role === "system" ? "System" : "Assistant"}</h3>

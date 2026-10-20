@@ -6,6 +6,8 @@ any transport failure or 5xx is an unknown outcome, never a safe failure.
 from __future__ import annotations
 
 import asyncio
+import json
+import secrets
 from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -51,12 +53,12 @@ class GoogleBackend:
 
     # ------------------------------------------------------------ HTTP with error mapping
     async def _call(self, method: str, url: str, *, write: bool = False, params: Any = None, json: Any = None, headers: dict[str, str] | None = None,
-                    sync: bool = False, raw: bool = False) -> Any:
+                    sync: bool = False, raw: bool = False, content: bytes | None = None) -> Any:
         token = await self.access_token()
         async with httpx.AsyncClient(transport=self.transport, timeout=httpx.Timeout(30, connect=10)) as c:
             for attempt in range(2):
                 try:
-                    r = await c.request(method, url, params=params, json=json, headers={"authorization": f"Bearer {token}", **(headers or {})})
+                    r = await c.request(method, url, params=params, json=json, content=content, headers={"authorization": f"Bearer {token}", **(headers or {})})
                 except (httpx.ConnectError, httpx.ConnectTimeout):
                     raise ConnectorError("provider_unavailable", "could not connect to Google") from None
                 except httpx.TransportError:
@@ -211,7 +213,7 @@ class GoogleBackend:
         return {"id": found[0]["id"]} if found else None
 
     # ------------------------------------------------------------ writes
-    async def write(self, tool: str, c: dict[str, Any], idempotency_key: str | None) -> dict[str, Any]:
+    async def write(self, tool: str, c: dict[str, Any], idempotency_key: str | None, files: list[bytes] | None = None) -> dict[str, Any]:
         g, cal = self.s.gmail_api_base, self.s.calendar_api_base
         if tool == "gmail.send_message":
             thread_id = in_reply_to = references = None
@@ -220,10 +222,20 @@ class GoogleBackend:
                                         params=[("format", "metadata"), ("metadataHeaders", "Message-ID"), ("metadataHeaders", "References")])
                 h = mime.headers_of(orig.get("payload", {}))
                 thread_id, in_reply_to, references = orig.get("threadId"), h.get("message-id"), h.get("references")
-            body: dict[str, Any] = {"raw": mime.build_raw(c, self.clock.now(), in_reply_to=in_reply_to, references=references)}
-            if thread_id:
-                body["threadId"] = thread_id
-            sent = await self._call("POST", f"{g}/users/me/messages/send", json=body, write=True)
+            if files:
+                # Large messages go through the upload endpoint: metadata (the thread) first, then the RFC 822 message.
+                message = mime.build_message(c, self.clock.now(), in_reply_to=in_reply_to, references=references, files=files)
+                boundary = f"opa_{secrets.token_hex(16)}"
+                meta = json.dumps({"threadId": thread_id} if thread_id else {}).encode()
+                payload = (f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n".encode() + meta
+                           + f"\r\n--{boundary}\r\nContent-Type: message/rfc822\r\n\r\n".encode() + message + f"\r\n--{boundary}--\r\n".encode())
+                sent = await self._call("POST", f"{self.s.gmail_upload_base}/users/me/messages/send", params={"uploadType": "multipart"}, content=payload,
+                                        headers={"content-type": f"multipart/related; boundary={boundary}"}, write=True)
+            else:
+                body: dict[str, Any] = {"raw": mime.build_raw(c, self.clock.now(), in_reply_to=in_reply_to, references=references)}
+                if thread_id:
+                    body["threadId"] = thread_id
+                sent = await self._call("POST", f"{g}/users/me/messages/send", json=body, write=True)
             return {"data": {"message_id": sent["id"], "thread_id": sent.get("threadId")}, "provider_refs": [f"gmail:{sent['id']}"]}
         if tool == "calendar.create_event":
             body = {"id": idempotency_key, "summary": c["summary"], "start": to_google_time(c["start"]), "end": to_google_time(c["end"])}

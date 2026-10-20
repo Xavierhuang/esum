@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Action, api2, ApiError, Approval, PreviewField } from "../api";
+import { Action, api2, ApiError, Approval, Decision, PreviewField } from "../api";
 
 function relative(iso: string): string {
   const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
@@ -23,19 +23,30 @@ function Fields({ fields }: { fields: PreviewField[] }) {
   );
 }
 
-/** One pending change, shown exactly as it will be sent. Used on the Approvals screen and inline in the chat. */
+const ANNOUNCE: Record<Decision, Record<string, (title: string) => string>> = {
+  allow_once: { approved: (t) => `Approved: ${t}. The assistant will continue.` },
+  edit_and_allow: { approved: (t) => `Approved your edited version: ${t}. The assistant will continue.` },
+  skip: { skipped: (t) => `Skipped: ${t}. Nothing was done, and the assistant will continue.` },
+  deny: { denied: (t) => `Denied: ${t}. The task is stopped.` },
+};
+
+/** One pending change, shown exactly as it will be sent. Used on the Approvals screen and inline in the chat.
+ *  Emails can be edited before approving: the server records the edited email as a new action you approve. */
 export function ApprovalCard({ a, announce, onDone }: { a: Approval; announce: (s: string) => void; onDone: () => void | Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const editable = a.preview.tool === "gmail.send_message";
+  const [editing, setEditing] = useState(false);
+  const [subject, setSubject] = useState(String(a.preview.payload.subject ?? ""));
+  const [body, setBody] = useState(String(a.preview.payload.body ?? ""));
   const titleId = `ap-${a.id}`;
   const descId = `ap-d-${a.id}`;
-  const decide = async (decision: "allow_once" | "deny") => {
+  const decide = async (decision: Decision) => {
     setError(""); setBusy(true);
     try {
-      const r = await api2.decide(a, decision);
-      announce(decision === "allow_once"
-        ? (r.outcome === "approved" ? `Approved: ${a.preview.title}. The assistant will continue.` : `Not approved: this request is ${r.outcome}.`)
-        : (r.outcome === "denied" ? `Denied: ${a.preview.title}.` : `This request is ${r.outcome}.`));
+      const r = await api2.decide(a, decision, decision === "edit_and_allow" ? { subject, body } : undefined);
+      const say = ANNOUNCE[decision][r.outcome];
+      announce(say ? say(a.preview.title) : `Not done: this request is ${r.outcome}.`);
       await onDone();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Action failed");
@@ -50,11 +61,29 @@ export function ApprovalCard({ a, announce, onDone }: { a: Approval; announce: (
         For task “{a.task_intent.slice(0, 80)}”. {a.preview.side_effects} Expires {relative(a.expires_at)}
         {" "}(<time dateTime={a.expires_at}>{new Date(a.expires_at).toLocaleString()}</time>).
       </p>
-      <Fields fields={a.preview.fields} />
-      <div className="row">
-        <button className="primary" disabled={busy} onClick={() => decide("allow_once")}>Allow once</button>
-        <button disabled={busy} onClick={() => decide("deny")}>Deny</button>
-      </div>
+      {editing ? (
+        <form className="edit" onSubmit={(e) => { e.preventDefault(); void decide("edit_and_allow"); }}>
+          <Fields fields={a.preview.fields.filter((f) => !["Subject", "Body"].includes(f.label))} />
+          <label>Subject<input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} /></label>
+          <label>Body<textarea rows={8} value={body} onChange={(e) => setBody(e.target.value)} /></label>
+          <p className="muted">To change who receives it, ask the assistant for a new draft.</p>
+          <div className="row">
+            <button className="primary" type="submit" disabled={busy || !body.trim()}>Approve edited version</button>
+            <button type="button" disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <Fields fields={a.preview.fields} />
+          <div className="row">
+            <button className="primary" disabled={busy} onClick={() => decide("allow_once")}>Allow once</button>
+            {editable && <button disabled={busy} onClick={() => setEditing(true)}>Edit</button>}
+            <button disabled={busy} onClick={() => decide("skip")} aria-describedby={`ap-h-${a.id}`}>Skip</button>
+            <button disabled={busy} onClick={() => decide("deny")} aria-describedby={`ap-h-${a.id}`}>Deny</button>
+          </div>
+          <p id={`ap-h-${a.id}`} className="muted small">Skip: not this one, the assistant carries on. Deny: stop the task.</p>
+        </>
+      )}
       {error && <p role="alert" className="error">{error}</p>}
     </article>
   );

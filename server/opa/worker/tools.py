@@ -1,4 +1,6 @@
-"""Tools available to the model in M1: ask_user and note. Connector tools arrive via the broker in M2."""
+"""Core tools: ask_user, post_update, and note. Connector tools arrive via the broker in M2.
+
+ask_user and post_update write to the conversation, so the worker runs them itself (see loop.py)."""
 from __future__ import annotations
 
 from typing import Any
@@ -11,6 +13,12 @@ class LocalTools:
                 "name": "ask_user",
                 "description": "Ask the owner a clarifying question and pause until they reply.",
                 "input_schema": {"type": "object", "properties": {"question": {"type": "string"}}, "required": ["question"], "additionalProperties": False},
+            },
+            {
+                "name": "post_update",
+                "description": "Post a message to the owner's chat now and keep working, without waiting for a reply. Use it to share a summary "
+                               "before proposing changes, or progress on long work. The final answer still goes in your last reply.",
+                "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"], "additionalProperties": False},
             },
             {
                 "name": "note",

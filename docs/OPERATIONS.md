@@ -4,7 +4,19 @@ Everything needed to run, configure, connect, test, back up, and restore OpenMus
 
 ## Run locally without Docker
 
-**Quick start (demo mode).** After the install step below, run `npm run dev` (or `node scripts/dev.mjs`) from the repository root. It builds the web app if needed, starts an embedded database and every service, creates a local sign-in on first run (`demo@example.com` / `demo-password-123`, or set `OPA_DEV_EMAIL` and `OPA_DEV_PASSWORD`), and prints the address to open. `PORT` changes the port (default 8080). Data is kept in `server/data/`. The steps below are for running the services yourself.
+**Quick start (demo mode).** After the install step below, run `npm run dev` (or `node scripts/dev.mjs`) from the repository root. It builds the web app if needed, starts an embedded database and every service, creates a local sign-in on first run (`demo@example.com` / `demo-password-123`, or set `OPA_DEV_EMAIL` and `OPA_DEV_PASSWORD`), and prints the address to open. `PORT` changes the port (default 8080). Data is kept in `server/data/`. Demo replies are scripted (`server/opa/worker/demo_script.yaml`): try "Connect my accounts", "Go through my inbox", and "Summarize my Notion meeting notes". The steps below are for running the services yourself.
+
+## Use your real accounts
+
+`npm run dev` switches to live mode when `server/.env` says so. Every service reads that file.
+
+1. `cp server/.env.example server/.env`
+2. Put your Claude API key in `OPA_ANTHROPIC_API_KEY`. The default model is `claude-opus-5-5`; set `OPA_MODEL_ID` to change it.
+3. Create a Google OAuth client and put it in `OPA_GOOGLE_CLIENT_ID` and `OPA_GOOGLE_CLIENT_SECRET` (steps 1 to 3 of [Connect Google](#connect-google-live-mode)).
+4. Run `npm run dev`. Live mode keeps its data apart from the demo's (`server/data/dev-pg-live`), creates a broker key for stored credentials once (`server/data/dev-broker-kek`, unless `OPA_BROKER_KEK` is set), and prints a note for anything still missing.
+5. In the chat, say "Connect my Google account" and confirm the card, then "Go through my inbox and draft replies". For a morning routine, say "Every weekday at 8:00, go through my inbox and draft replies" and confirm the automation.
+
+Demo mode never calls Claude, so a key in `server/.env` without `OPA_MODE=live` is ignored (the launcher says so).
 
 Requires [uv](https://docs.astral.sh/uv/), Node 20+ with npm, and PostgreSQL 16 (the test suite starts an embedded one on its own).
 
@@ -61,7 +73,13 @@ The API binds to `127.0.0.1:8080` only. The worker has no internet route except 
 
 ## Model configuration
 
-`OPA_MODE=demo` with `OPA_MODEL_PROVIDER=scripted` needs no keys and makes no network calls. For real use set `OPA_MODE=live`, `OPA_MODEL_PROVIDER=anthropic`, and `OPA_ANTHROPIC_API_KEY`. Missing configuration appears as a setup banner in the UI rather than a silent fallback.
+`OPA_MODE=demo` with `OPA_MODEL_PROVIDER=scripted` needs no keys and makes no network calls. For real use set `OPA_MODE=live`, `OPA_MODEL_PROVIDER=anthropic`, and `OPA_ANTHROPIC_API_KEY` (`npm run dev` picks `anthropic` by itself in live mode). The default model is `claude-opus-5-5` at effort `high`, with Anthropic's server-side refusal fallback turned on. Missing configuration appears as a setup banner in the UI rather than a silent fallback.
+
+## Inbox triage and approving drafts
+
+"Go through my inbox" loads the inbox-triage skill. It reads unread mail from the last day, posts one summary in the chat (needs your reply, FYI, can ignore; sign-in codes are withheld), then proposes up to five replies one at a time. Each reply goes only to the sender of the email it answers. Anything that depends on your decision (money, commitments) is listed instead of drafted. It never archives, labels, deletes, or marks mail as read.
+
+Every approval card offers **Allow once** and two other choices. **Skip** refuses that one item, and the task carries on with the rest. **Deny** refuses and stops the task. Email cards also have **Edit**, which lets you change the subject and body before approving. Recipients cannot be edited; ask for a new draft instead. Your edited email is recorded as a new action with its own hash. The assistant's original draft stays in the ledger as proposed, and the assistant is told you changed it.
 
 ## Skills, and managing accounts from the chat
 

@@ -1,6 +1,6 @@
 # Implementation Status
 
-Last updated: 2026-09-28 (v0.2 read-only connectors) • Spec: `docs/open-muse-implementation-requirements.md` v0.1.1 • Design: `docs/tech-design.md`
+Last updated: 2026-10-20 (v0.3 inbox triage) • Spec: `docs/open-muse-implementation-requirements.md` v0.1.1 • Design: `docs/tech-design.md`
 
 ## Milestones
 
@@ -14,6 +14,7 @@ Last updated: 2026-09-28 (v0.2 read-only connectors) • Spec: `docs/open-muse-i
 | M6 Browser and release | **Implemented, packaged, and verified locally.** All automated release gates pass (`scripts/release_check.py`). Manual gates still open: A17b screen-reader pass, a Docker Compose build and run, live Google and Claude checks (see `docs/RELEASING.md`) |
 | v0.2 Read-only connectors | **Implemented; live verification pending credentials.** Google Drive, Notion, and GitHub (GitHub App), read only. Verified against in-process fakes of each provider's HTTP API and the demo account, not the real services (see v0.2 evidence below) |
 | v0.2 Skills harness | **Implemented and verified locally** (fixture provider and fakes). Every capability is a skill loaded on demand; accounts are connected, changed, and disconnected from the chat with owner confirmation (see skills evidence below) |
+| v0.3 Inbox triage | **Implemented and verified locally** (fixture provider, scripted model, fake Google for attachments). Triage skill, `post_update`, Edit and Skip on approvals, Gmail attachments for Google accounts, live mode from `npm run dev`, scripted demo replies (see v0.3 evidence below). Live Gmail and Claude are still unverified |
 
 ## Requirement status
 
@@ -132,7 +133,19 @@ Totals on 2026-09-28 after release packaging: 237 pytest cases pass (206 through
 - Seven code mutations (no escaping, serving revoked or expired links, plain-text tokens, sharing account cards, allowing scripts, listing other owners' shares) were each caught and reverted.
 - UI smoke: the share dialog and the public page pass axe-core; the page opens in a fresh browser context without a session.
 
+## v0.3 inbox triage verification
+
+- `tests/acceptance/test_v03_inbox_triage.py` (8 tests): the demo mailbox answers the triage query with unread primary mail, newest first, and withholds the sign-in code; categories, dates, and negation filter as Gmail does. End to end with the scripted model, the summary is in the chat before the first draft is decided and nothing is sent. Editing the first draft sends exactly the edited body; the original action stays as proposed (`cancelled`, `edited_by_owner`), its approval is invalidated, an `approval.edited` audit row names it, and the assistant is told. Skipping the second draft sends nothing and the task finishes instead of blocking. Edits need the reviewed hash (409 otherwise), reject multi-line subjects and oversize bodies without changing anything, and approve as shown when nothing changed. A tampered edited email is cancelled at dispatch. Only email can be edited (`not_editable`). Deny still blocks. `post_update` needs text.
+- `tests/acceptance/test_v03_demo_script.py` (2 tests): the shipped demo script's connect, triage (eight valid tool calls, two approvals, two sends), Notion, and default replies all run.
+- `test_m3_google.py`: a reply with an attachment goes through Gmail's multipart upload endpoint with the thread ID in the metadata part, carries the approved bytes, name, and type, and keeps In-Reply-To. A text-only email still uses the plain endpoint.
+- Mutation checks: making Skip block the task, editing the proposed action in place instead of replacing it, and dropping the attachment bytes at dispatch each make a test fail.
+- Browser smoke: "Go through my inbox" shows the summary, then a draft card; Edit, change the body, Approve edited version, then Skip the next draft and the task finishes. axe-core scans the edit form. The keyboard-only approval still passes.
+- Two older tests counted every message in the demo mailbox; they now check the same rule (sensitive mail withheld) against the larger mailbox.
+- Full suite: 281 passed. Frontend type check, contract check, and build pass.
+
 ## Not verified / known limitations
+
+- v0.3: triage drafts are proposed one at a time, because a task waits on one approval at a time. The calendar is consulted only when the model decides a reply depends on it. A `post_update` message can repeat if the worker crashes between posting it and the next checkpoint. Gmail attachments use the multipart upload endpoint as Google documents it, but have only been tested against the fake.
 
 - Sharing: a link works only if the deployment is reachable at `OPA_PUBLIC_BASE_URL`; on the default localhost setup only this machine can open it. Links are shown once and cannot be recovered. View counts include any preview fetched by chat apps that unfurl links.
 - Skills harness: the assistant only sees a skill's instructions after loading it, so a real model may occasionally skip loading and call a tool directly (the harness then loads it). Tasks do not resume on their own after the owner confirms a connection; the owner asks again. Skills are read from disk at worker start-up; changes to `OPA_SKILLS_DIR` need a restart.
@@ -142,7 +155,7 @@ Totals on 2026-09-28 after release packaging: 237 pytest cases pass (206 through
 - Compose now declares the broker, egress proxy, database roles, and isolated networks, but it has not been run, so the network half of T-NET-01 (the worker cannot reach any host except through the proxy) is unverified. The proxy's policy half is tested.
 - No real Google API has been called. Differences between the fake and Google (error payload details, MIME edge cases, rate-limit behavior) are possible until the live check is run.
 - The Google connect flow is tested at the API level; the browser smoke covers the demo account only.
-- **Follow-up from merging M3 and M4:** email attachments are still refused for Google accounts because the Gmail adapter does not build MIME attachments yet. M4 planned this for when M3 merged; it was not part of M5. The end-to-end scenario therefore passes on the fixture provider only.
+- Email attachments for Google accounts were added in v0.3 (multipart upload, verified against the fake Google only).
 - M4: Compose now mounts an `artifacts` volume (read-write for api and worker, read-only for broker), but it has not been run. The PDF extraction child is time- and CPU-limited but not network- or seccomp-sandboxed. Built-in PDF fonts cover Latin-1 only. Artifact and memory tool calls are not deduplicated if the worker crashes between the tool's commit and the checkpoint. `opa artifacts-gc` now runs hourly inside `opa scheduler` (M5). No axe-core scan or VoiceOver pass was run on the new screens (A17 is M6).
 - M5: the scheduler polls every 15 seconds, so a run can start up to 15 seconds after its time (runs over 2 minutes late are marked late). Calendar triggers poll every 5 minutes, so a change is noticed within about 5 minutes plus the 60-second quiet period. The Google calendar sync path is tested against the fake Google, not real Google. An automation whose previous run is waiting for approval holds its next runs until that run finishes; the owner is notified once. The trigger's baseline is kept in the automation row and covers events from one day ago to 60 days ahead.
 - The Anthropic adapter has not been exercised against the live API (no key configured). It is code-complete but unverified.

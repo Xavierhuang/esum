@@ -116,7 +116,14 @@ def normalize_message(m: dict[str, Any], *, with_body: bool) -> dict[str, Any]:
     return out
 
 
-def build_raw(c: dict[str, Any], now: datetime, *, in_reply_to: str | None = None, references: str | None = None) -> str:
+def build_raw(c: dict[str, Any], now: datetime, *, in_reply_to: str | None = None, references: str | None = None,
+              files: list[bytes] | None = None) -> str:
+    return base64.urlsafe_b64encode(build_message(c, now, in_reply_to=in_reply_to, references=references, files=files)).decode().rstrip("=")
+
+
+def build_message(c: dict[str, Any], now: datetime, *, in_reply_to: str | None = None, references: str | None = None,
+                  files: list[bytes] | None = None) -> bytes:
+    """RFC 2822 bytes. `files` are the approved attachments' bytes, in the order of c["attachments"]."""
     msg = EmailMessage()
     msg["From"] = c["from"]
     msg["To"] = ", ".join(c["to"])
@@ -131,4 +138,10 @@ def build_raw(c: dict[str, Any], now: datetime, *, in_reply_to: str | None = Non
         msg["In-Reply-To"] = in_reply_to
         msg["References"] = f"{references} {in_reply_to}".strip() if references else in_reply_to
     msg.set_content(c["body"])
-    return base64.urlsafe_b64encode(msg.as_bytes()).decode().rstrip("=")
+    attached = c.get("attachments") or []
+    if len(attached) != len(files or []):
+        raise ValueError("every approved attachment needs its bytes")
+    for meta, data in zip(attached, files or []):
+        maintype, _, subtype = (meta.get("mime") or "application/octet-stream").partition("/")
+        msg.add_attachment(data, maintype=maintype, subtype=subtype or "octet-stream", filename=meta["name"])
+    return msg.as_bytes()

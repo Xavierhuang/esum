@@ -17,7 +17,7 @@ from typing import Any
 from opa.connectors import registry
 from opa.skills.library import Skill, SkillLibrary, load_library
 
-CORE_TOOLS = ("ask_user", "note", "skill__load", "connections__list", "connections__request")
+CORE_TOOLS = ("ask_user", "post_update", "note", "skill__load", "connections__list", "connections__request")
 READY = "ready"
 
 

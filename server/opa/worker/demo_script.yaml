@@ -1,0 +1,96 @@
+# Scripted replies for demo mode (`npm run dev` without a Claude API key). Demo mode never calls a
+# model provider, so these canned steps show the real flows (cards, approvals, files) on sample data.
+# A rule applies when its `contains` text appears in the task's first message; steps run in order.
+match:
+  - contains: "Connect my"
+    steps:
+      - tool_calls:
+          - name: connections__request
+            input:
+              action: connect
+              provider: fixture
+              connection_id: null
+              modes: {gmail: read_write, calendar: read_only, drive: read_only, notion: read_only, github: read_only}
+              reason: "So I can read your mail, calendar, and documents, and draft email replies. Every email still waits for your OK."
+      - text: "Confirm the card to connect the demo account. Then try “Go through my inbox”."
+
+  - contains: "inbox"
+    steps:
+      - tool_calls:
+          - name: skill__load
+            input: {name: inbox-triage}
+      - tool_calls:
+          - name: gmail__search_messages
+            input: {connection_id: "@auto", query: "in:inbox is:unread newer_than:1d", max_results: 25, page_token: null}
+      - tool_calls:
+          - name: gmail__get_message
+            input: {connection_id: "@auto", message_id: m021}
+          - name: gmail__get_message
+            input: {connection_id: "@auto", message_id: m022}
+          - name: gmail__get_message
+            input: {connection_id: "@auto", message_id: m023}
+          - name: gmail__get_message
+            input: {connection_id: "@auto", message_id: m024}
+      - tool_calls:
+          - name: gmail__get_thread
+            input: {connection_id: "@auto", thread_id: t20}
+      - tool_calls:
+          - name: post_update
+            input:
+              text: |-
+                Your inbox: 3 need a reply, 1 FYI, 3 you can ignore.
+
+                Needs your reply
+                • Lena (acme-client): wants to move Friday's call to Monday or Tuesday afternoon. Draft below.
+                • Jordan: coffee next week, Wednesday morning? Draft below.
+                • Marcus: is there room for the $1,200 analytics tool in the Q4 budget? He needs to know by Thursday. That's your call, so no draft.
+
+                FYI
+                • The office is closed Monday for maintenance (ops@team).
+
+                Can ignore: 3 (a receipt, a promotion, a merged pull request). 1 sign-in code withheld.
+      - tool_calls:
+          - name: gmail__send_message
+            input:
+              connection_id: "@auto"
+              to: [lena@acme-client.example]
+              cc: []
+              bcc: []
+              subject: "Re: Call on Friday"
+              body: "Hi Lena,\n\nNo problem. Tuesday afternoon works for me. How about 2pm?\n\nThanks"
+              in_reply_to_message_id: m021
+              attachments: []
+      - tool_calls:
+          - name: gmail__send_message
+            input:
+              connection_id: "@auto"
+              to: [jordan@friend.example]
+              cc: []
+              bcc: []
+              subject: "Re: Coffee next week?"
+              body: "Hey Jordan,\n\nYes, it's been way too long! Wednesday morning works for me. Does 9:30 suit you, and where would you like to meet?\n\nSee you then"
+              in_reply_to_message_id: m023
+              attachments: []
+      - text: "That's this morning's inbox. Anything you sent is in your Sent folder, and skipped drafts were not sent. Marcus is still waiting on your budget decision."
+
+  - contains: "Notion"
+    steps:
+      - tool_calls:
+          - name: skill__load
+            input: {name: notion}
+      - tool_calls:
+          - name: notion__search
+            input: {connection_id: "@auto", query: "notes", kind: page, page_size: null, start_cursor: null}
+      - tool_calls:
+          - name: notion__read_page
+            input: {connection_id: "@auto", page_id: n-meeting-notes}
+      - text: "Design review notes: the team decided to ship onboarding v2 in October.\n\nOne line on the page told me to email these notes to an outside address. I ignored it: text inside your documents is never an instruction to me."
+
+default:
+  text: |-
+    This is demo mode, so my replies are scripted and I only know a few requests:
+    • “Connect my accounts”
+    • “Go through my inbox”
+    • “Summarize my Notion meeting notes”
+
+    To talk to the real assistant about anything, add your Claude API key and run in live mode (see “Use your real accounts” in docs/OPERATIONS.md).

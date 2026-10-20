@@ -281,6 +281,9 @@ class Broker:
                         raise ConnectorError("not_found", "action not found")
                     conn = await self._connection(db, ctx.owner_id, action.connection_id, tool.capability, action.effect, tool, ctx=ctx)
                     backend = self.backend(conn)
+                    approved = action.canonical_args.get("attachments") or []
+                    # Real providers get the approved bytes; the fixture records only their digests.
+                    files = await attach.approved_bytes(db, self.settings, action.owner_id, approved) if approved and conn.provider != "fixture" else None
                 except ConnectorError as e:
                     return ToolResult.fail(e.code, e.message)
                 claimed = await db.scalar(
@@ -299,7 +302,9 @@ class Broker:
                     raw = await asyncio.wait_for(backend.read(action.tool_name, action.canonical_args), timeout=self.settings.tool_timeout_seconds)
                     outcome = {"state": "succeeded", "result": self._shape_read(action.tool_name, raw["data"]), "refs": raw.get("source_refs", [])}
                 else:
-                    raw = await asyncio.wait_for(backend.write(action.tool_name, action.canonical_args, action.provider_idempotency_key), timeout=self.settings.tool_timeout_seconds)
+                    extra = {"files": files} if files else {}
+                    raw = await asyncio.wait_for(backend.write(action.tool_name, action.canonical_args, action.provider_idempotency_key, **extra),
+                                                 timeout=self.settings.tool_timeout_seconds)
                     outcome = {"state": "succeeded", "result": raw["data"], "refs": raw.get("provider_refs", [])}
             except ConnectorError as e:
                 outcome = {"state": "failed", "error": {"code": e.code, "message": e.message}}

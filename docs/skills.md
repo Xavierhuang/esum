@@ -22,8 +22,9 @@ Every capability the assistant has is a **skill**: a folder with a `SKILL.md` fi
 | `automations` | `automation__propose`, `automation__list`, `automation__trigger_details` | — |
 | `browser` | `browser__*` | the browser service |
 | `daily-brief` | (uses `gmail`, `calendar`, `files`) | Gmail and Calendar access |
+| `inbox-triage` | (uses `gmail`, `calendar`) | Gmail access; read and propose changes to draft replies |
 
-Always available, outside any skill: `ask_user`, `note`, `skill__load`, `connections__list`, `connections__request`.
+Always available, outside any skill: `ask_user`, `post_update` (a message in the chat while the task keeps working), `note`, `skill__load`, `connections__list`, `connections__request`.
 
 ## Accounts from the chat
 

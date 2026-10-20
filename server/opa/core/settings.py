@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres@localhost:5432/opa"
     mode: Literal["demo", "live"] = "demo"
     model_provider: Literal["scripted", "anthropic"] = "scripted"
-    model_id: str = "claude-opus-5"
+    model_id: str = "claude-opus-5-5"
     model_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
     anthropic_api_key: str | None = None
     scripted_model_path: str | None = None
@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     google_revoke_url: str = "https://oauth2.googleapis.com/revoke"
     google_userinfo_url: str = "https://openidconnect.googleapis.com/v1/userinfo"
     gmail_api_base: str = "https://gmail.googleapis.com/gmail/v1"
+    gmail_upload_base: str = "https://gmail.googleapis.com/upload/gmail/v1"  # messages with attachments
     calendar_api_base: str = "https://www.googleapis.com/calendar/v3"
     drive_api_base: str = "https://www.googleapis.com/drive/v3"
     oauth_state_ttl_minutes: int = 10
