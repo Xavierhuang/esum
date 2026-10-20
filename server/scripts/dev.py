@@ -116,8 +116,8 @@ def main() -> int:
                OPA_WEB_PROXY_URL=f"http://127.0.0.1:{proxy}", OPA_ARTIFACT_DIR=str(DATA / f"artifacts{suffix}"), OPA_EXPORT_DIR=str(DATA / f"exports{suffix}"))
     if provider == "scripted" and not cfg.get("OPA_SCRIPTED_MODEL_PATH"):
         env["OPA_SCRIPTED_MODEL_PATH"] = str(SERVER / "opa" / "worker" / "demo_script.yaml")
-    if live and not cfg.get("OPA_BROKER_KEK"):
-        env["OPA_BROKER_KEK"] = broker_kek()
+    if not cfg.get("OPA_BROKER_KEK"):
+        env["OPA_BROKER_KEK"] = broker_kek()  # sealed website sign-ins need it in demo mode too
     notes = []
     if live and not (cfg.get("OPA_GOOGLE_CLIENT_ID") and cfg.get("OPA_GOOGLE_CLIENT_SECRET")):
         notes.append("Google is not set up (OPA_GOOGLE_CLIENT_ID and OPA_GOOGLE_CLIENT_SECRET), so Gmail and Calendar cannot be connected yet.")

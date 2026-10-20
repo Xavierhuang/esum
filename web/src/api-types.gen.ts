@@ -425,6 +425,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/browser-sessions/{session_id}/save-signin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Signin
+         * @description Saves the sign-in you did in this browser for the website it is showing. The cookies go from the browser to the
+         *     broker's encrypted store; the assistant never sees them and can use them only with your approval, one task at a time.
+         */
+        post: operations["save_signin_api_browser_sessions__session_id__save_signin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browser-sessions/{session_id}/screenshot": {
         parameters: {
             query?: never;
@@ -1053,6 +1074,40 @@ export interface paths {
         /** Retry Task */
         post: operations["retry_task_api_tasks__task_id__retry_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-signins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Signins */
+        get: operations["list_signins_api_web_signins_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/web-signins/{signin_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Signin */
+        delete: operations["delete_signin_api_web_signins__signin_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1801,6 +1856,11 @@ export interface components {
             /** Task Id */
             task_id: string;
         };
+        /** SaveSignInIn */
+        SaveSignInIn: {
+            /** Name */
+            name: string;
+        };
         /** SessionOut */
         SessionOut: {
             /** Control */
@@ -1879,6 +1939,27 @@ export interface components {
             title: string;
             /** View Count */
             view_count: number;
+        };
+        /** SignInOut */
+        SignInOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Host */
+            host: string;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** SkillOut */
         SkillOut: {
@@ -2947,6 +3028,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_signin_api_browser_sessions__session_id__save_signin_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSignInIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInOut"];
                 };
             };
             /** @description Validation Error */
@@ -4261,6 +4377,55 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RetryOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_signins_api_web_signins_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignInOut"][];
+                };
+            };
+        };
+    };
+    delete_signin_api_web_signins__signin_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                signin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

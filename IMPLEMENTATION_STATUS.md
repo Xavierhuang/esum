@@ -14,6 +14,7 @@ Last updated: 2026-10-20 (v0.3 inbox triage) • Spec: `docs/open-muse-implement
 | M6 Browser and release | **Implemented, packaged, and verified locally.** All automated release gates pass (`scripts/release_check.py`). Manual gates still open: A17b screen-reader pass, a Docker Compose build and run, live Google and Claude checks (see `docs/RELEASING.md`) |
 | v0.2 Read-only connectors | **Implemented; live verification pending credentials.** Google Drive, Notion, and GitHub (GitHub App), read only. Verified against in-process fakes of each provider's HTTP API and the demo account, not the real services (see v0.2 evidence below) |
 | v0.2 Skills harness | **Implemented and verified locally** (fixture provider and fakes). Every capability is a skill loaded on demand; accounts are connected, changed, and disconnected from the chat with owner confirmation (see skills evidence below) |
+| v0.3 Saved website sign-ins | **Implemented and verified locally** (fixture website, real Chromium, the real broker). Sign in once in your own browser, save it, and the assistant can open that site signed in only after approval, without seeing the cookies (see v0.3 sign-in evidence below). Not tried on a real website |
 | v0.3 Inbox triage | **Implemented and verified locally** (fixture provider, scripted model, fake Google for attachments). Triage skill, `post_update`, Edit and Skip on approvals, Gmail attachments for Google accounts, live mode from `npm run dev`, scripted demo replies (see v0.3 evidence below). Live Gmail and Claude are still unverified |
 
 ## Requirement status
@@ -141,9 +142,17 @@ Totals on 2026-09-28 after release packaging: 237 pytest cases pass (206 through
 - Mutation checks: making Skip block the task, editing the proposed action in place instead of replacing it, and dropping the attachment bytes at dispatch each make a test fail.
 - Browser smoke: "Go through my inbox" shows the summary, then a draft card; Edit, change the body, Approve edited version, then Skip the next draft and the task finishes. axe-core scans the edit form. The keyboard-only approval still passes.
 - Two older tests counted every message in the demo mailbox; they now check the same rule (sensitive mail withheld) against the larger mailbox.
-- Full suite: 281 passed. Frontend type check, contract check, and build pass.
+- Full suite: 290 passed with sign-ins. Frontend type check, contract check, and build pass.
+
+## v0.3 saved website sign-ins verification
+
+- `tests/acceptance/test_v03_web_signin.py` (9 tests, real Chromium against a fixture site that sets a session cookie): saving from the owner's browser returns only the name and site, and the stored row contains neither the cookie value nor a plaintext copy; saving the same site again replaces it. With nothing open, or a page that set no cookie, there is nothing to save. With no saved sign-in the assistant browses signed out and no cookie is sent. With one, the first navigation waits for an approval that names the site, address, and sign-in, and opens nothing before the decision; after approval the page loads signed in, a second visit in the same task needs no new approval, the site received the cookie, and the cookie value appears nowhere in the task's saved conversation or audit rows (`web_signin.used` is logged). Deny opens nothing. Deleting a sign-in means nothing is asked or sent; another owner cannot list or delete it (404). Taking control and handing back clears the cookies and the signed-in list, so the next visit asks again. Host and cookie scoping are unit-tested (`notexample.com` and `example.com.evil.test` are not covered by `example.com`).
+- Mutation checks: making the worker skip the approval, and not clearing the signed-in list on hand-back, each make a test fail.
+- Migration `6e8b3f1d2a47` (`broker.web_signins`) has no drift and downgrades and re-applies. The broker role's existing grants cover the new table.
 
 ## Not verified / known limitations
+
+- v0.3 sign-ins: tried only against a fixture website, never a real one. Only session cookies are saved, so a site that keeps its login in local storage will not stay signed in, and a site that ties its session to the original browser or address may sign the assistant out. Saved cookies expire when the site says so; there is no reminder. Signing in is manual (passwords and 2FA are typed by the owner in the live view, whose input is limited to clicks, text, and a few keys). The browser screen's new controls (Open my browser, Save the sign-in, Saved sign-ins) pass type-check and build and the existing browser-screen smoke steps, but the smoke does not yet click the new ones. Compose is unchanged: the browser container still cannot reach the broker, and the unrun Compose file is as unverified as before.
 
 - v0.3: triage drafts are proposed one at a time, because a task waits on one approval at a time. The calendar is consulted only when the model decides a reply depends on it. A `post_update` message can repeat if the worker crashes between posting it and the next checkpoint. Gmail attachments use the multipart upload endpoint as Google documents it, but have only been tested against the fake.
 

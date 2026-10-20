@@ -15,12 +15,15 @@ from sqlalchemy import select
 from opa.api.auth import SESSION_COOKIE, resolve_session
 from opa.api.deps import ClockDep, DbDep, OwnerDep, get_owned
 from opa.api.tasks_service import requeue
+from opa.broker.client import BrokerUnavailable
 from opa.browser.client import BrowserCommandError, BrowserUnavailable
-from opa.core.errors import Conflict, Invalid
+from opa.core.errors import Conflict, Invalid, NotFound
 from opa.db.models import BrowserSession, Task
 from opa.db.outbox import emit
+from opa.sdk.contract import ConnectorError
 
 router = APIRouter(prefix="/api/browser-sessions", tags=["browser"])
+signins = APIRouter(prefix="/api/web-signins", tags=["browser"])
 
 
 class SessionOut(BaseModel):
@@ -203,3 +206,59 @@ async def stream(websocket: WebSocket, session_id: str) -> None:
     finally:
         for t in tasks:
             t.cancel()
+
+
+# ---------------------------------------------------------------- saved website sign-ins
+
+class SignInOut(BaseModel):
+    id: str
+    host: str
+    label: str
+    created_at: datetime
+    updated_at: datetime
+    last_used_at: datetime | None
+
+
+class SaveSignInIn(BaseModel):
+    name: str  # what the owner calls this account, e.g. "Work GitHub"
+
+
+def _broker(request: Request):
+    broker = request.app.state.broker
+    if broker is None:
+        raise Invalid("the connector service is not configured", code="not_configured")
+    return broker
+
+
+async def _vault(call):
+    try:
+        return await call
+    except ConnectorError as e:
+        if e.code == "not_found":
+            raise NotFound(e.message) from None
+        raise Invalid(e.message, code=e.code) from None
+    except BrokerUnavailable:
+        raise Invalid("the connector service is unavailable", code="provider_unavailable") from None
+
+
+@router.post("/{session_id}/save-signin", response_model=SignInOut, status_code=201)
+async def save_signin(session_id: str, body: SaveSignInIn, request: Request, db: DbDep, owner: OwnerDep) -> SignInOut:
+    """Saves the sign-in you did in this browser for the website it is showing. The cookies go from the browser to the
+    broker's encrypted store; the assistant never sees them and can use them only with your approval, one task at a time."""
+    s = await get_owned(db, BrowserSession, session_id, owner)
+    if s.state != "active" or s.control != "user":
+        raise Conflict("take control of the browser before saving a sign-in", code="paused")
+    broker = _broker(request)
+    exported = await _service(_client(request).export_signin(s.id, owner.id))
+    return SignInOut(**await _vault(broker.save_web_signin(owner.id, exported["host"], body.name, exported["state"])))
+
+
+@signins.get("", response_model=list[SignInOut])
+async def list_signins(request: Request, owner: OwnerDep) -> list[SignInOut]:
+    return [SignInOut(**r) for r in await _vault(_broker(request).list_web_signins(owner.id))]
+
+
+@signins.delete("/{signin_id}", status_code=204)
+async def delete_signin(signin_id: str, request: Request, owner: OwnerDep) -> Response:
+    await _vault(_broker(request).delete_web_signin(owner.id, signin_id))
+    return Response(status_code=204)

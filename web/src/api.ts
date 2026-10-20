@@ -183,8 +183,18 @@ export interface BrowserSession {
 }
 export interface ExportInfo { id: string; file_name: string; size: number; sha256: string; counts: Record<string, number>; created_at: string }
 
+/** A website sign-in you saved. The cookies stay in the encrypted store; only the name and site are ever shown. */
+export interface SavedSignIn { id: string; host: string; label: string; created_at: string; updated_at: string; last_used_at: string | null }
+
+export const signInApi = {
+  list: () => req<SavedSignIn[]>("GET", "/api/web-signins"),
+  remove: (id: string) => req<void>("DELETE", `/api/web-signins/${id}`),
+};
+
 export const browserApi = {
   list: () => req<BrowserSession[]>("GET", "/api/browser-sessions"),
+  open: () => req<BrowserSession>("POST", "/api/browser-sessions"),
+  saveSignIn: (id: string, name: string) => req<SavedSignIn>("POST", `/api/browser-sessions/${id}/save-signin`, { name }),
   takeover: (id: string) => req<BrowserSession>("POST", `/api/browser-sessions/${id}/takeover`),
   resume: (id: string) => req<BrowserSession>("POST", `/api/browser-sessions/${id}/resume`),
   stop: (id: string) => req<BrowserSession>("POST", `/api/browser-sessions/${id}/stop`),

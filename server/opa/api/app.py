@@ -85,6 +85,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None, ses
     app.include_router(shares_router.router)
     app.include_router(shares_router.public)  # /s/{token}: before the web app's catch-all
     app.include_router(browser_router.router)
+    app.include_router(browser_router.signins)
     app.include_router(data_router.router)
     app.include_router(artifacts_router)
     app.include_router(memory_router)

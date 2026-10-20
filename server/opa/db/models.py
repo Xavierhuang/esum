@@ -346,6 +346,21 @@ class BrokerCredential(Base):
     updated_at: Mapped[datetime] = ts_col(onupdate=func.now())
 
 
+class BrokerWebSignIn(Base):
+    """A website sign-in the owner saved: the site's session cookies, sealed like a provider credential."""
+    __tablename__ = "web_signins"
+    __table_args__ = (UniqueConstraint("owner_id", "host"), {"schema": "broker"})
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=new_id)
+    owner_id: Mapped[str] = mapped_column(String(26), nullable=False, index=True)
+    host: Mapped[str] = mapped_column(String(255), nullable=False)
+    label: Mapped[str] = mapped_column(String(200), nullable=False)
+    dek_wrapped: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    secret_enc: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = ts_col()
+    updated_at: Mapped[datetime] = ts_col(onupdate=func.now())
+
+
 class DispatchClaim(Base):
     __tablename__ = "dispatch_claims"
     __table_args__ = {"schema": "broker"}

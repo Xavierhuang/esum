@@ -52,6 +52,11 @@ async def erase_owner(sm, settings, clock, owner_id: str, broker=None, browser=N
         except Exception as e:  # noqa: BLE001 - report; local deletion continues
             res = {"revoked": False, "error": f"{e.__class__.__name__}"}
         revocations.append({"account": c.account_label, **res})
+    if broker is not None:
+        try:
+            await broker.purge_web_signins(owner_id)
+        except Exception as e:  # noqa: BLE001 - report; local deletion continues
+            revocations.append({"account": "Saved website sign-ins", "revoked": False, "error": f"{e.__class__.__name__}"})
     # 3. delete rows (dependents first) and reset preferences
     counts: dict[str, int] = {}
     async with sm() as db, db.begin():

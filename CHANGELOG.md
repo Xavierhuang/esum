@@ -14,8 +14,11 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - **Scripted demo replies:** demo mode now walks through connecting the demo account, inbox triage, and reading Notion notes, and explains how to switch to live mode for anything else.
 - The demo mailbox has a realistic unread inbox, and its search understands `is:`, `category:`, `label:`, `newer_than:`, `older_than:`, `after:`, `before:`, and `-` negation.
 
+- **Saved website sign-ins:** sign in to a website once in your own browser (Browser > Open my browser) and save it. The assistant can then open that site signed in, only after you approve it, for that one task. The cookies are encrypted in the broker's store like a provider credential; the assistant sees only the name of the sign-in, never the cookies, and the browser container still has no route to the broker. Handing the browser back, stopping, or finishing the task ends the sign-in, and it can be removed at any time. Passwords are never stored.
+
 ### Changed
 - The default model is `claude-opus-5-5`.
+- The browser still cannot fill in forms or run scripts, so a saved sign-in lets the assistant read what you can see; it cannot act as you on a site.
 
 ## Unreleased (v0.2 connectors)
 

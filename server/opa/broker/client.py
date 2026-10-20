@@ -62,5 +62,23 @@ class BrokerClient:
         return await self._post("/internal/calendar/sync", {"owner_id": owner_id, "connection_id": connection_id, "calendar_id": calendar_id,
                                                             "sync_token": sync_token, "time_min": time_min})
 
+    async def save_web_signin(self, owner_id: str, host: str, label: str, state: dict[str, Any]) -> dict[str, Any]:
+        return await self._post("/internal/web-signins/save", {"owner_id": owner_id, "host": host, "label": label, "state": state})
+
+    async def list_web_signins(self, owner_id: str) -> list[dict[str, Any]]:
+        return await self._post("/internal/web-signins/list", {"owner_id": owner_id})
+
+    async def delete_web_signin(self, owner_id: str, signin_id: str) -> dict[str, Any]:
+        return await self._post("/internal/web-signins/delete", {"owner_id": owner_id, "signin_id": signin_id})
+
+    async def purge_web_signins(self, owner_id: str) -> dict[str, Any]:
+        return await self._post("/internal/web-signins/purge", {"owner_id": owner_id})
+
+    async def lookup_web_signin(self, task_id: str, lease_token: str, url: str) -> dict[str, Any] | None:
+        return await self._post("/internal/web-signins/lookup", {"task_id": task_id, "lease_token": lease_token, "url": url})
+
+    async def open_web_signin(self, task_id: str, lease_token: str, url: str) -> dict[str, Any]:
+        return await self._post("/internal/web-signins/open", {"task_id": task_id, "lease_token": lease_token, "url": url})
+
     async def aclose(self) -> None:
         await self._client.aclose()

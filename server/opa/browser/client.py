@@ -56,5 +56,11 @@ class BrowserClient:
     async def owner_input(self, session_id: str, event: dict[str, Any]) -> dict[str, Any]:
         return (await self._req("POST", f"/internal/sessions/{session_id}/input", json=event)).json()
 
+    async def export_signin(self, session_id: str, owner_id: str) -> dict[str, Any]:
+        return (await self._req("POST", f"/internal/sessions/{session_id}/export-signin", json={"owner_id": owner_id})).json()
+
+    async def import_signin(self, session_id: str, host: str, label: str, state: dict[str, Any]) -> dict[str, Any]:
+        return (await self._req("POST", f"/internal/sessions/{session_id}/import-signin", json={"host": host, "label": label, "state": state})).json()
+
     async def aclose(self) -> None:
         await self._c.aclose()

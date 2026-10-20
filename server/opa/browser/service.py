@@ -2,7 +2,8 @@
 
 Runs Chromium through the public-web egress proxy with no other route out. It holds no provider
 credentials, database access, or files. The agent can navigate, read, follow links, scroll, and use
-tabs; it cannot run JavaScript, submit forms, upload, download, or keep a signed-in session.
+tabs; it cannot run JavaScript, submit forms, upload, or download. It starts every session signed out; the
+only way to be signed in is a sign-in the owner saved and approved for that task (design section 9).
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
-from opa.browser.ops import UrlRejected, check_url
+from opa.browser.ops import UrlRejected, check_url, cookie_in_scope, signin_host
 
 log = logging.getLogger("opa.browser")
 MAX_TABS = 5
@@ -55,6 +56,7 @@ class Session:
     control: str = "agent"
     stopped: bool = False
     visited: list[dict[str, str]] = field(default_factory=list)
+    signed_in: dict[str, str] = field(default_factory=dict)  # saved sign-ins the owner approved for this session: host -> name
     next_tab: int = 1
     last_used: float = field(default_factory=time.monotonic)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -112,7 +114,7 @@ class BrowserService:
 
     def describe(self, s: Session) -> dict[str, Any]:
         return {"session_id": s.id, "control": s.control, "stopped": s.stopped, "current_tab": s.current,
-                "tabs": [{"tab_id": k, "url": p.url} for k, p in s.tabs.items()]}
+                "tabs": [{"tab_id": k, "url": p.url} for k, p in s.tabs.items()], "signed_in": sorted(s.signed_in)}
 
     async def stop(self, session_id: str) -> dict[str, Any]:
         s = self.sessions.get(session_id)
@@ -131,14 +133,54 @@ class BrowserService:
         s = self.get(session_id)
         async with s.lock:
             if control == "agent" and s.control == "user":
-                # Nothing the owner did while in control (e.g. signing in) carries over to the agent.
+                # Nothing the owner did while in control (e.g. signing in) carries over to the agent. A sign-in the
+                # owner saved is the only way in, and it needs a fresh approval.
                 await s.context.clear_cookies()
+                s.signed_in.clear()
                 for page in s.tabs.values():
                     try:
                         await page.evaluate("() => { try { localStorage.clear(); sessionStorage.clear(); } catch (e) {} }")
                     except Exception:
                         pass
             s.control = control
+        return self.describe(s)
+
+    async def export_signin(self, session_id: str, owner_id: str) -> dict[str, Any]:
+        """The cookies of the site the owner is looking at, for saving. Only while the owner drives the browser."""
+        s = self.get(session_id)
+        if s.owner_id != owner_id:
+            raise BrowserError("not_found", "this browser session has ended")
+        async with s.lock:
+            if s.control != "user":
+                raise BrowserError("paused", "take control of the browser before saving a sign-in")
+            try:
+                url = check_url(s.tabs[s.current].url)
+            except UrlRejected:
+                raise BrowserError("invalid_input", "open the website you signed in to first") from None
+            host = signin_host(url)
+            cookies = [c for c in (await s.context.storage_state())["cookies"] if cookie_in_scope(c["domain"], host)]
+        return {"host": host, "state": {"cookies": cookies}}
+
+    async def import_signin(self, session_id: str, host: str, label: str, state: dict[str, Any]) -> dict[str, Any]:
+        """Give the agent's browser the cookies of one saved sign-in. Cookies are limited to that site."""
+        s = self.get(session_id)
+        async with s.lock:
+            if s.control != "agent":
+                raise BrowserError("paused", "the owner has taken control of the browser; wait until they resume")
+            host = signin_host(host)
+            cookies = []
+            for c in state.get("cookies", []):
+                if not cookie_in_scope(c.get("domain", ""), host):
+                    continue
+                item = {k: c[k] for k in ("name", "value", "domain", "path", "httpOnly", "secure", "sameSite") if k in c}
+                item.setdefault("path", "/")
+                if isinstance(c.get("expires"), (int, float)) and c["expires"] > 0:
+                    item["expires"] = c["expires"]
+                cookies.append(item)
+            if not cookies:
+                raise BrowserError("invalid_input", "the saved sign-in has no cookies for this site")
+            await s.context.add_cookies(cookies)
+            s.signed_in[host] = label
         return self.describe(s)
 
     async def reap_idle(self) -> int:

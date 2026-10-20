@@ -2314,6 +2314,19 @@
         "title": "RetryOut",
         "type": "object"
       },
+      "SaveSignInIn": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SaveSignInIn",
+        "type": "object"
+      },
       "SessionOut": {
         "properties": {
           "control": {
@@ -2545,6 +2558,54 @@
           "last_viewed_at"
         ],
         "title": "ShareOut",
+        "type": "object"
+      },
+      "SignInOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "host",
+          "label",
+          "created_at",
+          "updated_at",
+          "last_used_at"
+        ],
+        "title": "SignInOut",
         "type": "object"
       },
       "SkillOut": {
@@ -4276,6 +4337,59 @@
           }
         },
         "summary": "Resume",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/browser-sessions/{session_id}/save-signin": {
+      "post": {
+        "description": "Saves the sign-in you did in this browser for the website it is showing. The cookies go from the browser to the\nbroker's encrypted store; the assistant never sees them and can use them only with your approval, one task at a time.",
+        "operationId": "save_signin_api_browser_sessions__session_id__save_signin_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSignInIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Signin",
         "tags": [
           "browser"
         ]
@@ -6103,6 +6217,66 @@
         "summary": "Retry Task",
         "tags": [
           "tasks"
+        ]
+      }
+    },
+    "/api/web-signins": {
+      "get": {
+        "operationId": "list_signins_api_web_signins_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SignInOut"
+                  },
+                  "title": "Response List Signins Api Web Signins Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Signins",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/web-signins/{signin_id}": {
+      "delete": {
+        "operationId": "delete_signin_api_web_signins__signin_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "signin_id",
+            "required": true,
+            "schema": {
+              "title": "Signin Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Signin",
+        "tags": [
+          "browser"
         ]
       }
     }

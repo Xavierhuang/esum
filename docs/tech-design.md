@@ -349,6 +349,8 @@ Browser service API (internal): `create`, `command(navigate|snapshot|click|scrol
 
 Data-sharing check: before `navigate`, the worker asks the api whether the URL contains any string longer than 12 characters that also appears in the task's loaded memory, connector results, or artifact text; if so the navigation becomes a write-like action requiring approval (WEB-01 data-sharing rule).
 
+Saved sign-ins: the owner signs in in their own browser session and saves it (`POST /api/browser-sessions/{id}/save-signin`). The api asks the browser service for that site's cookies (`export-signin`, owner-driven sessions only) and hands them to the broker, which seals them in `broker.web_signins` with the vault (AAD = row id). Using one is an approval: when a navigation's host has a saved sign-in and the session is not yet signed in, the navigation becomes a `browser.navigate` action whose canonical payload carries `sign_in: {host, label}`. After approval the worker asks the broker to `open` it (lease-checked; audited) and passes the cookies straight to the browser service (`import-signin`); they never enter a tool result or the model's messages. The session remembers which hosts are signed in; takeover/resume clears cookies and that list. The browser container still has no route to the broker.
+
 ### 9.3 Live view
 
 `GET /api/browser-sessions/{id}/stream` is a WebSocket on the api, which relays to the browser service. Downstream frames: `{"t":"frame","jpeg":base64,"w":..,"h":..}` from CDP `Page.startScreencast` (quality 60, max 1280 wide, ≤10 fps). Upstream during `control='user'` only: `{"t":"mouse"|"key"|"wheel", ...}` mapped to `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent`. While `control='user'`, agent commands return `paused` and the worker parks the task in `waiting_user`. Fallback: `GET .../screenshot` returns the latest JPEG.
@@ -516,6 +518,14 @@ Scripted adapter: loads a YAML script keyed by step number with fixed tool calls
 7. **Export uses column allowlists**, not table dumps, so a new secret column never leaks by default. Each file has a JSON Schema generated from the same allowlist.
 8. **Delete-all keeps the account.** Everything the owner created goes; the owner row, password, and sessions stay so the owner can keep using the deployment. The broker purges its own records through `/internal/connections/purge` because the app role cannot touch the broker schema.
 9. **Backups are two files plus files-on-disk.** `app.dump` (schema public) and optional `broker.dump` (credentials, useless without the key-encryption key, which is never included). Restore refuses non-empty targets, verifies SHA-256s, extracts with Python's `data` tar filter, and then applies the post-restore rules in one transaction. Automations paused by a restore resume only when the owner resumes each one, and missed runs are not replayed.
+
+## 22a. Decisions recorded during v0.3 saved sign-ins
+
+1. **Cookies, not passwords.** The owner signs in themselves in the live view, so passwords, 2FA codes, and CAPTCHAs never pass through the system. Only the site's session cookies are kept. Local storage is not saved: it cannot be unloaded from a browser context once injected.
+2. **The broker keeps them; the worker carries them once.** Cookies move api -> broker on save and broker -> worker -> browser on use. The browser container never reaches the broker (a compromised page could otherwise ask for every saved sign-in), and the model never sees the cookies.
+3. **Use is an approval, once per task.** A saved sign-in turns the first navigation to that site into an approval card ("Use your saved sign-in"); the card is bound to the exact address and sign-in name, and the broker re-checks the name at use. Later visits in the same task need no new approval. Handing control back to the agent after a takeover clears it.
+4. **Read-only by construction.** The browser still cannot fill forms, click elements, or run scripts, so a saved sign-in lets the assistant read pages the owner can see; it cannot act as the owner on the site.
+5. **Filed under the host.** A sign-in covers its host and the hosts below it (`www.` ignored). Cookies for other sites are dropped on save and on use.
 
 ## 23. Decisions recorded during v0.2 connectors
 

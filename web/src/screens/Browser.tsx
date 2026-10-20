@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, browserApi, BrowserSession } from "../api";
+import { ApiError, browserApi, BrowserSession, SavedSignIn, signInApi } from "../api";
 
 const KEYS = ["Enter", "Tab", "Backspace", "Escape", "ArrowDown", "ArrowUp", "PageDown", "PageUp"];
 
@@ -56,7 +56,11 @@ export function Browser({ tick, announce }: { tick: number; announce: (m: string
   const [items, setItems] = useState<BrowserSession[]>([]);
   const [open, setOpen] = useState<string>("");
   const [error, setError] = useState("");
-  const refresh = useCallback(async () => setItems(await browserApi.list()), []);
+  const [signIns, setSignIns] = useState<SavedSignIn[]>([]);
+  const refresh = useCallback(async () => {
+    setItems(await browserApi.list());
+    setSignIns(await signInApi.list().catch(() => []));
+  }, []);
   useEffect(() => { void refresh(); }, [refresh, tick]);
   const run = async (fn: () => Promise<string>) => {
     setError("");
@@ -69,10 +73,15 @@ export function Browser({ tick, announce }: { tick: number; announce: (m: string
   return (
     <section aria-labelledby="browser-h">
       <h2 id="browser-h">Browser</h2>
-      <p className="muted">The assistant can read public web pages only. It cannot sign in, fill in forms, buy anything, or reach private networks.
+      <p className="muted">The assistant reads web pages in an isolated browser that starts signed out. It cannot fill in forms, buy anything, or reach private networks.
         Opening an address that would carry your private data needs your approval.</p>
       {error && <p role="alert" className="error">{error}</p>}
       {active.length === 0 && <p>No browser is open.</p>}
+      {!active.some((s) => !s.task_id) && (
+        <div className="row">
+          <button onClick={() => run(async () => { const b = await browserApi.open(); setOpen(b.id); return "Your browser is open. Go to a website, sign in, then save the sign-in."; })}>Open my browser</button>
+        </div>
+      )}
       {active.map((s) => (
         <article key={s.id} className="card" aria-label={`Browser for ${s.task_intent ?? "your own browsing"}`}>
           <h3>{s.task_intent ? `Task: ${s.task_intent.slice(0, 80)}` : "Your browser"}</h3>
@@ -85,9 +94,22 @@ export function Browser({ tick, announce }: { tick: number; announce: (m: string
             <button onClick={() => run(async () => { await browserApi.stop(s.id); return "Browser stopped. The task will continue without it."; })}>Stop</button>
           </div>
           {open === s.id && <LiveView s={s} announce={announce} />}
+          {s.control === "user" && <SaveSignIn s={s} run={run} />}
           <Visited s={s} />
         </article>
       ))}
+      <h3 id="signins-h">Saved sign-ins</h3>
+      <p className="muted">Sign in to a website in your own browser above, then save it. The assistant can use a saved sign-in only after you approve it,
+        for that one task, and it never sees your password or the session itself.</p>
+      {signIns.length === 0 && <p>No saved sign-ins.</p>}
+      <ul aria-labelledby="signins-h" className="plain">
+        {signIns.map((x) => (
+          <li key={x.id} className="row">
+            <span><strong>{x.label}</strong> <span className="muted">on {x.host}{x.last_used_at ? `, last used ${new Date(x.last_used_at).toLocaleString()}` : ", not used yet"}</span></span>
+            <button aria-label={`Remove the saved sign-in ${x.label} on ${x.host}`} onClick={() => run(async () => { await signInApi.remove(x.id); return `Removed the saved sign-in for ${x.host}.`; })}>Remove</button>
+          </li>
+        ))}
+      </ul>
       {past.length > 0 && <h3>Earlier sessions</h3>}
       {past.map((s) => (
         <article key={s.id} className="card" aria-label={`Ended browser for ${s.task_intent ?? "your own browsing"}`}>
@@ -96,6 +118,19 @@ export function Browser({ tick, announce }: { tick: number; announce: (m: string
         </article>
       ))}
     </section>
+  );
+}
+
+function SaveSignIn({ s, run }: { s: BrowserSession; run: (fn: () => Promise<string>) => Promise<void> }) {
+  const [name, setName] = useState("");
+  return (
+    <form className="row" onSubmit={(e) => {
+      e.preventDefault();
+      void run(async () => { const r = await browserApi.saveSignIn(s.id, name.trim()); setName(""); return `Saved the sign-in for ${r.host} as ${r.label}.`; });
+    }}>
+      <label>Name this sign-in <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Work account" /></label>
+      <button type="submit" disabled={!name.trim()}>Save the sign-in for the site shown</button>
+    </form>
   );
 }
 

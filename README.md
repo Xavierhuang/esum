@@ -55,7 +55,7 @@ The whole project (requirements, technical design, backend, frontend, tests, and
 - **🧠 Skill System** — Every capability is a `SKILL.md` loaded on demand. You can write your own in plain text (e.g., a "weekly review") without writing a single line of code.
 - **⏰ Automations** — "Remind me every weekday at 8:00 AM to review emails" or "notify me when my calendar changes"; nothing activates until you confirm it.
 - **📄 Files & Memory** — Generates Markdown, CSV, and PDF files; remembers only what you explicitly ask it to keep.
-- **🌐 Isolated Browser** — Navigates public web pages only (no sign-ins, no form submissions); watch it live and take control at any time.
+- **🌐 Isolated Browser** — Reads web pages in a sandbox that starts signed out (no form submissions). Sign in to a site yourself and save it, and the assistant can read it with your approval, never seeing your password or session. Watch it live and take control at any time.
 - **🔗 Sharing** — Convert selected messages into a read-only snapshot link that lasts 1, 7, or 30 days, and revoke access whenever you want.
 - **🗂️ Ownership of Your Data** — One-click full data export, one-click complete purge, plus full backup and restore capabilities.
 

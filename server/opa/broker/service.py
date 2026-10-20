@@ -26,6 +26,7 @@ from opa.broker.providers_oauth import client_for
 from opa.broker.rest_backends import GitHubBackend, NotionBackend
 from opa.connectors import registry
 from opa.broker.vault import Vault
+from opa.broker.web_signins import WebSignIns
 from opa.core.canonical import args_hash
 from opa.core.clock import Clock
 from opa.core.settings import Settings
@@ -56,6 +57,7 @@ class Broker:
         self.read_retry_base = read_retry_base
         self.google_transport = google_transport
         self.vault = Vault(settings.broker_kek) if settings.broker_kek else None
+        self.web_signins = WebSignIns(self)
 
     # ------------------------------------------------------------ helpers
     def backend(self, conn: Connection):

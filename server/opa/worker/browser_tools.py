@@ -11,12 +11,14 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from opa.broker.client import BrokerClient, BrokerUnavailable
 from opa.browser import ops
 from opa.browser.client import BrowserClient, BrowserCommandError, BrowserUnavailable
 from opa.core.canonical import args_hash
 from opa.core.clock import Clock
 from opa.db.models import BrowserSession, Job
 from opa.db.outbox import emit
+from opa.sdk.contract import ConnectorError
 
 ACTIONS = {"browser__navigate": "navigate", "browser__snapshot": "snapshot", "browser__click_link": "click_link",
            "browser__scroll": "scroll", "browser__open_tab": "open_tab", "browser__close_tab": "close_tab"}
@@ -47,8 +49,8 @@ def private_texts(messages: list[dict[str, Any]], memory_block: str) -> list[str
 class BrowserTools:
     names = set(ACTIONS)
 
-    def __init__(self, sm: async_sessionmaker[AsyncSession], clock: Clock, client: BrowserClient | None) -> None:
-        self.sm, self.clock, self.client = sm, clock, client
+    def __init__(self, sm: async_sessionmaker[AsyncSession], clock: Clock, client: BrowserClient | None, broker: BrokerClient | None = None) -> None:
+        self.sm, self.clock, self.client, self.broker = sm, clock, client, broker
 
     def definitions(self) -> list[dict[str, Any]]:
         return [dict(t) for t in ops.TOOLS] if self.client else []
@@ -96,8 +98,11 @@ class BrowserTools:
                 except ops.UrlRejected as e:
                     return _fail("permission_denied", str(e))
                 shared = ops.shared_private_data(url, private_texts(messages, memory_block))
-                if shared:
+                sign_in = await self._sign_in_needed(sess, task_id, token, url)
+                if shared or sign_in:
                     canonical = {"url": url, "tab_id": args.get("tab_id"), "new_tab": action == "open_tab", "shared": shared}
+                    if sign_in:
+                        canonical["sign_in"] = sign_in
                     return {"proposal": {"connection_id": None, "tool_name": "browser.navigate", "tool_version": "1", "effect": "write",
                                          "canonical_args": canonical, "args_hash": args_hash("browser.navigate", "1", canonical),
                                          "preview": ops.preview(canonical), "provider_idempotency_key": None}}
@@ -109,6 +114,35 @@ class BrowserTools:
         except BrowserUnavailable:
             return _fail("provider_unavailable", "the browser service is unavailable")
         return await self._record(sess, result)
+
+    async def _sign_in_needed(self, sess: BrowserSession, task_id: str, token: str, url: str) -> dict[str, str] | None:
+        """The owner's saved sign-in for this address, if there is one and this browser is not already signed in with it.
+        Only its host and name are returned: the cookies never pass through the model-facing result."""
+        if self.broker is None:
+            return None
+        try:
+            found = await self.broker.lookup_web_signin(task_id, token, url)
+        except (BrokerUnavailable, ConnectorError):
+            return None  # fail closed: the page opens signed out
+        if not found:
+            return None
+        try:
+            signed_in = (await self.client.describe(sess.id)).get("signed_in", [])
+        except BrowserCommandError:
+            signed_in = []
+        return None if found["host"] in signed_in else {"host": found["host"], "label": found["label"]}
+
+    async def _use_sign_in(self, sess: BrowserSession, task_id: str, token: str, approved: dict[str, str], url: str) -> None:
+        """After approval: the broker unseals the cookies and the worker hands them straight to the browser."""
+        try:
+            opened = await self.broker.open_web_signin(task_id, token, url)
+        except ConnectorError as e:
+            raise BrowserCommandError(e.code, e.message) from None
+        except BrokerUnavailable:
+            raise BrowserCommandError("provider_unavailable", "the sign-in service is unavailable") from None
+        if (opened["host"], opened["label"]) != (approved["host"], approved["label"]):
+            raise BrowserCommandError("approval_required", "the saved sign-in changed after approval; a new approval is required")
+        await self.client.import_signin(sess.id, opened["host"], opened["label"], opened["state"])
 
     async def _run(self, sess: BrowserSession, action: str, args: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -139,6 +173,10 @@ class BrowserTools:
         sess = await self._session(owner_id, task_id, token)
         if sess.control == "user":
             raise BrowserCommandError("paused", "the owner has taken control of the browser")
+        if canonical.get("sign_in"):
+            if self.broker is None:
+                raise BrowserCommandError("provider_unavailable", "the sign-in service is not configured")
+            await self._use_sign_in(sess, task_id, token, canonical["sign_in"], canonical["url"])
         action = "open_tab" if canonical.get("new_tab") else "navigate"
         args = {"url": canonical["url"]} if action == "open_tab" else {"url": canonical["url"], "tab_id": canonical.get("tab_id")}
         return await self._record(sess, await self._run(sess, action, args))

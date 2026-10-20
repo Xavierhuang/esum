@@ -11,9 +11,13 @@ from opa.browser.service import BrowserService
 from opa.proxy import PublicWebPolicy, serve
 
 
+SESSION_COOKIE, SESSION_SECRET = "sid", "S3CR3T-SESSION-VALUE"
+
+
 class _Server:
     def __init__(self, handler_factory):
         self.hits: list[str] = []
+        self.cookies: list[str] = []  # the Cookie header of each request, to prove what the browser sent
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler_factory(self))
         self.port = self.httpd.server_address[1]
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
@@ -29,13 +33,21 @@ def _site_handler(site: "_Server"):
 
         def do_GET(self):
             site.hits.append(self.path)
+            site.cookies.append(self.headers.get("Cookie", ""))
             priv = site.private_port
+            extra: list[tuple[str, str]] = []
             if self.path.startswith("/redirect-private"):
                 self.send_response(302)
                 self.send_header("Location", f"http://127.0.0.1:{priv}/admin")
                 self.end_headers()
                 return
-            if self.path.startswith("/page2"):
+            if self.path.startswith("/login"):
+                extra.append(("Set-Cookie", f"{SESSION_COOKIE}={SESSION_SECRET}; Path=/; HttpOnly"))
+                body = "<html><head><title>Signed in</title></head><body><p>Welcome back.</p></body></html>"
+            elif self.path.startswith("/account"):
+                who = "Signed in as owner@example.com" if f"{SESSION_COOKIE}={SESSION_SECRET}" in self.headers.get("Cookie", "") else "Please sign in to see your account"
+                body = f"<html><head><title>Account</title></head><body><p>{who}</p></body></html>"
+            elif self.path.startswith("/page2"):
                 body = "<html><head><title>Second page</title></head><body><h1>Findings</h1><p>The Wren protocol has three phases.</p></body></html>"
             elif self.path.startswith("/search"):
                 body = f"<html><head><title>Search</title></head><body><p>Results for {self.path}</p></body></html>"
@@ -54,6 +66,8 @@ document.cookie = "tracker=1; path=/";
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
+            for k, v in extra:
+                self.send_header(k, v)
             self.end_headers()
             self.wfile.write(data)
     return H

@@ -27,6 +27,16 @@ class ControlIn(BaseModel):
     control: str
 
 
+class ExportSignInIn(BaseModel):
+    owner_id: str
+
+
+class ImportSignInIn(BaseModel):
+    host: str
+    label: str
+    state: dict[str, Any]
+
+
 def create_browser_app(service: BrowserService, token: str, *, reap_interval: float | None = None) -> FastAPI:
     if not token:
         raise RuntimeError("OPA_INTERNAL_TOKEN must be set for the browser service")
@@ -65,6 +75,14 @@ def create_browser_app(service: BrowserService, token: str, *, reap_interval: fl
         if body.control not in ("agent", "user"):
             raise BrowserError("invalid_input", "control must be agent or user")
         return await service.set_control(sid, body.control)
+
+    @app.post("/internal/sessions/{sid}/export-signin", dependencies=guarded)
+    async def export_signin(sid: str, body: ExportSignInIn):
+        return await service.export_signin(sid, body.owner_id)
+
+    @app.post("/internal/sessions/{sid}/import-signin", dependencies=guarded)
+    async def import_signin(sid: str, body: ImportSignInIn):
+        return await service.import_signin(sid, body.host, body.label, body.state)
 
     @app.post("/internal/sessions/{sid}/stop", dependencies=guarded)
     async def stop(sid: str):

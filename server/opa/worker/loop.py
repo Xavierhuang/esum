@@ -74,7 +74,7 @@ class Worker:
         self.outputs = OutputTools(settings, sessionmaker, self.clock)  # M4: artifact and memory tools
         from opa.worker.browser_tools import BrowserTools
 
-        self.browser_tools = BrowserTools(sessionmaker, self.clock, browser)  # M6: restricted public browsing
+        self.browser_tools = BrowserTools(sessionmaker, self.clock, browser, broker)  # M6: restricted public browsing; saved sign-ins come from the broker
         self.skills = skill_harness.library_for(settings.skills_dir)  # v0.2: every capability is a skill
 
     # ---------- lifecycle ----------

@@ -63,6 +63,26 @@ class ReconcileIn(BaseModel):
     owner_id: str  # supplied by the authenticated API, never by the model
 
 
+class SaveSignInIn(BaseModel):
+    owner_id: str  # supplied by the authenticated API, which checked that the owner is driving that browser
+    host: str
+    label: str
+    state: dict[str, Any]
+
+
+class OwnedSignIn(BaseModel):
+    owner_id: str
+    signin_id: str
+
+
+class OwnerOnly(BaseModel):
+    owner_id: str
+
+
+class SignInForTask(Lease):
+    url: str
+
+
 def create_broker_app(broker: Broker, *, sweep_interval: float | None = None) -> FastAPI:
     token = broker.settings.internal_token
     if not token:
@@ -127,6 +147,30 @@ def create_broker_app(broker: Broker, *, sweep_interval: float | None = None) ->
     @app.post("/internal/calendar/sync", dependencies=guarded)
     async def calendar_sync(body: CalendarSyncIn) -> dict[str, Any]:
         return await broker.calendar_sync(body.owner_id, body.connection_id, body.calendar_id, body.sync_token, body.time_min)
+
+    @app.post("/internal/web-signins/save", dependencies=guarded)
+    async def signin_save(body: SaveSignInIn) -> dict[str, Any]:
+        return await broker.web_signins.save(body.owner_id, body.host, body.label, body.state)
+
+    @app.post("/internal/web-signins/list", dependencies=guarded)
+    async def signin_list(body: OwnerOnly) -> list[dict[str, Any]]:
+        return await broker.web_signins.list_for(body.owner_id)
+
+    @app.post("/internal/web-signins/delete", dependencies=guarded)
+    async def signin_delete(body: OwnedSignIn) -> dict[str, Any]:
+        return await broker.web_signins.delete(body.owner_id, body.signin_id)
+
+    @app.post("/internal/web-signins/purge", dependencies=guarded)
+    async def signin_purge(body: OwnerOnly) -> dict[str, Any]:
+        return await broker.web_signins.purge(body.owner_id)
+
+    @app.post("/internal/web-signins/lookup", dependencies=guarded)
+    async def signin_lookup(body: SignInForTask) -> dict[str, Any] | None:
+        return await broker.web_signins.lookup(body.task_id, body.lease_token, body.url)
+
+    @app.post("/internal/web-signins/open", dependencies=guarded)
+    async def signin_open(body: SignInForTask) -> dict[str, Any]:
+        return await broker.web_signins.open(body.task_id, body.lease_token, body.url)
 
     if sweep_interval:
         @app.on_event("startup")
