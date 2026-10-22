@@ -222,7 +222,7 @@ class Worker:
                     raise Blocked("budget_exceeded", "active runtime budget reached")
 
                 # Only core tools and loaded skills are offered; the scripted test model may resolve "@auto" against every tool.
-                result: GenerateResult = await self.model.generate(messages, skills.offered(), {**limits, "task_id": task_id, "catalog_tools": all_defs}, system=system)
+                result: GenerateResult = await self.model.generate(messages, skills.offered(), {**limits, "task_id": task_id, "lease_token": token, "catalog_tools": all_defs}, system=system)
                 usage["model_calls"] = usage.get("model_calls", 0) + 1
                 usage["input_tokens"] = usage.get("input_tokens", 0) + result.usage.get("input_tokens", 0)
                 usage["output_tokens"] = usage.get("output_tokens", 0) + result.usage.get("output_tokens", 0)

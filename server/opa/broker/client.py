@@ -80,5 +80,17 @@ class BrokerClient:
     async def open_web_signin(self, task_id: str, lease_token: str, url: str) -> dict[str, Any]:
         return await self._post("/internal/web-signins/open", {"task_id": task_id, "lease_token": lease_token, "url": url})
 
+    async def save_model_key(self, owner_id: str, provider: str, base_url: str | None, model: str, api_key: str) -> dict[str, Any]:
+        return await self._post("/internal/model-key/save", {"owner_id": owner_id, "provider": provider, "base_url": base_url, "model": model, "api_key": api_key})
+
+    async def get_model_key(self, owner_id: str) -> dict[str, Any] | None:
+        return await self._post("/internal/model-key/get", {"owner_id": owner_id})
+
+    async def delete_model_key(self, owner_id: str) -> dict[str, Any]:
+        return await self._post("/internal/model-key/delete", {"owner_id": owner_id})
+
+    async def model_key_for_task(self, task_id: str, lease_token: str) -> dict[str, Any] | None:
+        return await self._post("/internal/model-key/for-task", {"task_id": task_id, "lease_token": lease_token})
+
     async def aclose(self) -> None:
         await self._client.aclose()

@@ -4,10 +4,10 @@ from fastapi import APIRouter, Request, Response
 from sqlalchemy import delete
 
 from opa import __version__
-from opa.api.auth import SESSION_COOKIE, login, record_failed_attempt
+from opa.api.auth import SESSION_COOKIE, login, record_failed_attempt, signup, start_session, throttle_signup
 from opa.core.errors import Unauthorized
 from opa.api.deps import ClockDep, DbDep, OwnerDep, SessionDep, SettingsDep
-from opa.api.schemas import LoginIn, MeOut, PreferencesIn
+from opa.api.schemas import AuthOptionsOut, LoginIn, MeOut, PreferencesIn, SignupIn
 from opa.core.errors import Invalid
 from opa.db.models import Session
 from opa.worker.model import setup_problems
@@ -31,6 +31,31 @@ async def post_login(body: LoginIn, request: Request, response: Response, db: Db
     return response
 
 
+def _set_session_cookie(response: Response, settings, raw: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE, raw, httponly=True, secure=settings.secure_cookies, samesite="lax", path="/",
+        max_age=settings.session_ttl_hours * 3600,
+    )
+
+
+@router.get("/auth/options", response_model=AuthOptionsOut)
+async def auth_options(settings: SettingsDep) -> AuthOptionsOut:
+    """What the sign-in page may offer before anyone is signed in."""
+    return AuthOptionsOut(signup=settings.signup_enabled)
+
+
+@router.post("/auth/signup", status_code=204)
+async def post_signup(body: SignupIn, request: Request, response: Response, db: DbDep, settings: SettingsDep, clock: ClockDep) -> Response:
+    """Creates a new private account and signs it in. Off unless OPA_SIGNUP_ENABLED is set."""
+    if settings.signup_enabled:
+        await throttle_signup(request.app.state.sessionmaker, settings, clock, request.client.host if request.client else "unknown")
+    owner = await signup(db, settings, clock, body.email, body.password, body.time_zone)
+    _sess, raw = await start_session(db, settings, clock, owner)
+    _set_session_cookie(response, settings, raw)
+    response.status_code = 204
+    return response
+
+
 @router.post("/auth/logout", status_code=204)
 async def post_logout(response: Response, db: DbDep, sess: SessionDep) -> Response:
     await db.execute(delete(Session).where(Session.id == sess.id))
@@ -39,17 +64,32 @@ async def post_logout(response: Response, db: DbDep, sess: SessionDep) -> Respon
     return response
 
 
+async def model_key_state(request: Request, owner_id: str, settings) -> tuple[dict | None, bool]:
+    """The owner's saved model key (as a hint) and whether the app must ask for one before chatting."""
+    wants_key = settings.mode == "live" and settings.model_provider == "anthropic" and not settings.anthropic_api_key
+    broker = request.app.state.broker
+    if broker is None:
+        return None, False
+    try:
+        key = await broker.get_model_key(owner_id)
+    except Exception:  # noqa: BLE001 - never block the app on this; the worker reports a missing key itself
+        return None, False
+    return key, wants_key and key is None
+
+
 @router.get("/me", response_model=MeOut)
-async def get_me(owner: OwnerDep, sess: SessionDep, settings: SettingsDep) -> MeOut:
+async def get_me(request: Request, owner: OwnerDep, sess: SessionDep, settings: SettingsDep) -> MeOut:
+    key, needs = await model_key_state(request, owner.id, settings)
     return MeOut(
         id=owner.id, email=owner.email, time_zone=owner.time_zone, assistant_name=owner.assistant_name,
         response_style=owner.response_style, mode=settings.mode, setup_required=setup_problems(settings),
         csrf_token=sess.csrf_secret, approval_mode=owner.preferences.get("approval_mode", "ask_writes"), version=__version__,
+        default_model=settings.model_id, model_key=key, needs_model_key=needs,
     )
 
 
 @router.patch("/me", response_model=MeOut)
-async def patch_me(body: PreferencesIn, owner: OwnerDep, sess: SessionDep, settings: SettingsDep) -> MeOut:
+async def patch_me(body: PreferencesIn, request: Request, owner: OwnerDep, sess: SessionDep, settings: SettingsDep) -> MeOut:
     if body.time_zone is not None:
         from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -64,4 +104,4 @@ async def patch_me(body: PreferencesIn, owner: OwnerDep, sess: SessionDep, setti
         owner.assistant_name = body.assistant_name
     if body.response_style is not None:
         owner.response_style = body.response_style
-    return await get_me(owner, sess, settings)
+    return await get_me(request, owner, sess, settings)

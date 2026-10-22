@@ -131,16 +131,23 @@ class AnthropicAdapter:
 
     name = "anthropic"
 
-    def __init__(self, settings: Settings) -> None:
-        if not settings.anthropic_api_key:
+    def __init__(self, settings: Settings, *, api_key: str | None = None, base_url: str | None = None, model: str | None = None,
+                 transport: Any = None) -> None:
+        api_key = api_key or settings.anthropic_api_key
+        if not api_key:
             raise ModelSetupError("OPA_ANTHROPIC_API_KEY is not set")
         from anthropic import AsyncAnthropic, DefaultAsyncHttpxClient
 
         # The worker's only route to the model is the egress proxy when one is configured.
-        http_client = DefaultAsyncHttpxClient(proxy=settings.model_proxy) if settings.model_proxy else None
-        self.client = AsyncAnthropic(api_key=settings.anthropic_api_key, http_client=http_client)
-        self.model = settings.model_id
+        http_client = None
+        if settings.model_proxy or transport:
+            http_client = DefaultAsyncHttpxClient(proxy=settings.model_proxy, transport=transport)
+        self.client = AsyncAnthropic(api_key=api_key, base_url=base_url, http_client=http_client)
+        self.model = model or settings.model_id
         self.effort = settings.model_effort
+        # A gateway (ZenMux or another Anthropic-compatible address) gets a plain Messages request:
+        # Claude-only extras such as server-side fallbacks and the effort setting may be refused there.
+        self.gateway = base_url is not None
 
     async def generate(self, messages, tools, limits, *, system: str) -> GenerateResult:
         from anthropic import APIConnectionError, APIStatusError, RateLimitError
@@ -155,16 +162,24 @@ class AnthropicAdapter:
             for t in tools
         ]
         try:
-            resp = await self.client.beta.messages.create(
-                model=self.model,
-                max_tokens=16000,
-                system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-                messages=messages,
-                tools=api_tools or None,  # type: ignore[arg-type]
-                output_config={"effort": self.effort},
-                betas=["server-side-fallback-2026-07-01"],
-                fallbacks="default",
-            )
+            if self.gateway:
+                for t in api_tools:
+                    t.pop("strict", None)
+                resp = await self.client.messages.create(
+                    model=self.model, max_tokens=16000, system=system, messages=messages,
+                    **({"tools": api_tools} if api_tools else {}),  # type: ignore[arg-type]
+                )
+            else:
+                resp = await self.client.beta.messages.create(
+                    model=self.model,
+                    max_tokens=16000,
+                    system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+                    messages=messages,
+                    tools=api_tools or None,  # type: ignore[arg-type]
+                    output_config={"effort": self.effort},
+                    betas=["server-side-fallback-2026-07-01"],
+                    fallbacks="default",
+                )
         except RateLimitError as e:
             return GenerateResult(text="", tool_calls=[], stop_reason="error", refusal_detail=f"rate_limited: {e}")
         except APIStatusError as e:
@@ -197,13 +212,60 @@ class AnthropicAdapter:
         return GenerateResult("".join(text_parts), calls, resp.stop_reason or "end_turn", usage, detail, raw)
 
 
-def build_adapter(settings: Settings) -> ModelAdapter:
+class OwnerKeyAdapter:
+    """Bring your own key: each model call uses the task owner's saved key (Anthropic, ZenMux or another
+    Anthropic-compatible gateway). Without one it uses the deployment's key, if there is one."""
+
+    name = "anthropic"
+
+    def __init__(self, settings: Settings, broker: Any, fallback: ModelAdapter | None = None, *, transport: Any = None) -> None:
+        self.settings = settings
+        self.broker = broker
+        self.fallback = fallback
+        self.transport = transport
+        self._adapters: dict[tuple[str, ...], AnthropicAdapter] = {}
+
+    def _adapter_for(self, key: dict[str, Any]) -> AnthropicAdapter:
+        import hashlib
+
+        cache_key = (key["base_url"] or "", key["model"], key["version"], hashlib.sha256(key["api_key"].encode()).hexdigest())
+        adapter = self._adapters.get(cache_key)
+        if adapter is None:
+            if len(self._adapters) >= 32:
+                self._adapters.clear()
+            adapter = AnthropicAdapter(self.settings, api_key=key["api_key"], base_url=key["base_url"], model=key["model"], transport=self.transport)
+            self._adapters[cache_key] = adapter
+        return adapter
+
+    async def generate(self, messages, tools, limits, *, system: str) -> GenerateResult:
+        from opa.broker.client import BrokerUnavailable
+        from opa.sdk.contract import ConnectorError
+
+        task_id, lease_token = limits.get("task_id"), limits.get("lease_token")
+        try:
+            key = await self.broker.model_key_for_task(task_id, lease_token) if task_id and lease_token else None
+        except (ConnectorError, BrokerUnavailable) as e:
+            return GenerateResult(text="", tool_calls=[], stop_reason="error", refusal_detail=f"could not load your API key: {e}")
+        if key is not None:
+            return await self._adapter_for(key).generate(messages, tools, limits, system=system)
+        if self.fallback is not None:
+            return await self.fallback.generate(messages, tools, limits, system=system)
+        return GenerateResult(text="", tool_calls=[], stop_reason="error",
+                              refusal_detail="no API key yet: add yours in Skills and accounts, then resume this task")
+
+
+def build_adapter(settings: Settings, broker: Any = None) -> ModelAdapter:
     if settings.model_provider == "scripted":
         return ScriptedAdapter(path=settings.scripted_model_path)
     if settings.model_provider == "anthropic":
         if settings.mode == "demo":
             raise ModelSetupError("demo mode never makes provider calls; set OPA_MODEL_PROVIDER=scripted")
-        return AnthropicAdapter(settings)
+        fallback = AnthropicAdapter(settings) if settings.anthropic_api_key else None
+        if broker is not None:
+            return OwnerKeyAdapter(settings, broker, fallback)
+        if fallback is None:
+            raise ModelSetupError("OPA_ANTHROPIC_API_KEY is not set")
+        return fallback
     raise ModelSetupError(f"unknown model provider {settings.model_provider!r}")
 
 
@@ -212,6 +274,6 @@ def setup_problems(settings: Settings) -> list[str]:
     problems: list[str] = []
     if settings.mode == "live" and settings.model_provider == "scripted":
         problems.append("model: live mode requires a real provider (OPA_MODEL_PROVIDER=anthropic)")
-    if settings.model_provider == "anthropic" and not settings.anthropic_api_key:
-        problems.append("model: OPA_ANTHROPIC_API_KEY is not set")
+    if settings.model_provider == "anthropic" and not settings.anthropic_api_key and not settings.internal_token:
+        problems.append("model: OPA_ANTHROPIC_API_KEY is not set")  # with the broker running, each owner can bring a key instead
     return problems

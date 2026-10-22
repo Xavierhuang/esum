@@ -26,6 +26,7 @@ from opa.broker.providers_oauth import client_for
 from opa.broker.rest_backends import GitHubBackend, NotionBackend
 from opa.connectors import registry
 from opa.broker.vault import Vault
+from opa.broker.model_keys import ModelKeys
 from opa.broker.web_signins import WebSignIns
 from opa.core.canonical import args_hash
 from opa.core.clock import Clock
@@ -50,7 +51,7 @@ class TaskContext:
 
 class Broker:
     def __init__(self, settings: Settings, sessionmaker: async_sessionmaker[AsyncSession], clock: Clock, *, read_retry_base: float = 0.5,
-                 google_transport: Any = None) -> None:
+                 google_transport: Any = None, model_transport: Any = None) -> None:
         self.settings = settings
         self.sm = sessionmaker
         self.clock = clock
@@ -58,6 +59,8 @@ class Broker:
         self.google_transport = google_transport
         self.vault = Vault(settings.broker_kek) if settings.broker_kek else None
         self.web_signins = WebSignIns(self)
+        self.model_transport = model_transport
+        self.model_keys = ModelKeys(self)
 
     # ------------------------------------------------------------ helpers
     def backend(self, conn: Connection):

@@ -11,7 +11,7 @@ Everything needed to run, configure, connect, test, back up, and restore OpenMus
 `npm run dev` switches to live mode when `server/.env` says so. Every service reads that file.
 
 1. `cp server/.env.example server/.env`
-2. Put your Claude API key in `OPA_ANTHROPIC_API_KEY`. The default model is `claude-opus-5-5`; set `OPA_MODEL_ID` to change it.
+2. Either leave `OPA_ANTHROPIC_API_KEY` empty and paste your key in the app after signing in (Anthropic, ZenMux, or any Anthropic-compatible provider; it is stored encrypted by the broker), or put a server-wide Claude API key in `OPA_ANTHROPIC_API_KEY`. The default model is `claude-opus-5-5`; set `OPA_MODEL_ID` to change it. With Docker Compose, add a custom provider's host to the `egress-proxy` `--allow` list.
 3. Create a Google OAuth client and put it in `OPA_GOOGLE_CLIENT_ID` and `OPA_GOOGLE_CLIENT_SECRET` (steps 1 to 3 of [Connect Google](#connect-google-live-mode)).
 4. Run `npm run dev`. Live mode keeps its data apart from the demo's (`server/data/dev-pg-live`), creates a broker key for stored credentials once (`server/data/dev-broker-kek`, unless `OPA_BROKER_KEK` is set), and prints a note for anything still missing.
 5. In the chat, say "Connect my Google account" and confirm the card, then "Go through my inbox and draft replies". For a morning routine, say "Every weekday at 8:00, go through my inbox and draft replies" and confirm the automation.

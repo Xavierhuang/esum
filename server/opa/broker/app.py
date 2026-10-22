@@ -83,6 +83,14 @@ class SignInForTask(Lease):
     url: str
 
 
+class SaveModelKeyIn(BaseModel):
+    owner_id: str
+    provider: str
+    base_url: str | None = None
+    model: str
+    api_key: str
+
+
 def create_broker_app(broker: Broker, *, sweep_interval: float | None = None) -> FastAPI:
     token = broker.settings.internal_token
     if not token:
@@ -171,6 +179,22 @@ def create_broker_app(broker: Broker, *, sweep_interval: float | None = None) ->
     @app.post("/internal/web-signins/open", dependencies=guarded)
     async def signin_open(body: SignInForTask) -> dict[str, Any]:
         return await broker.web_signins.open(body.task_id, body.lease_token, body.url)
+
+    @app.post("/internal/model-key/save", dependencies=guarded)
+    async def model_key_save(body: SaveModelKeyIn) -> dict[str, Any]:
+        return await broker.model_keys.save(body.owner_id, body.provider, body.base_url, body.model, body.api_key)
+
+    @app.post("/internal/model-key/get", dependencies=guarded)
+    async def model_key_get(body: OwnerOnly) -> dict[str, Any] | None:
+        return await broker.model_keys.get(body.owner_id)
+
+    @app.post("/internal/model-key/delete", dependencies=guarded)
+    async def model_key_delete(body: OwnerOnly) -> dict[str, Any]:
+        return await broker.model_keys.delete(body.owner_id)
+
+    @app.post("/internal/model-key/for-task", dependencies=guarded)
+    async def model_key_for_task(body: Lease) -> dict[str, Any] | None:
+        return await broker.model_keys.for_task(body.task_id, body.lease_token)
 
     if sweep_interval:
         @app.on_event("startup")

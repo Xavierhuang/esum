@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OPA_", env_file=".env", extra="ignore")
 
     database_url: str = "postgresql+asyncpg://postgres@localhost:5432/opa"
+    # Hosts that allow no new schemas (LingCode Cloud): the broker's tables live in this existing schema instead.
+    broker_schema: str = "broker"
     mode: Literal["demo", "live"] = "demo"
     model_provider: Literal["scripted", "anthropic"] = "scripted"
     model_id: str = "claude-opus-5-5"
@@ -25,6 +27,10 @@ class Settings(BaseSettings):
     session_ttl_hours: int = 24 * 14
     login_max_attempts: int = 5
     login_window_minutes: int = 15
+    # Open sign-up: anyone who can reach the server may create their own private account (they bring their own model key).
+    signup_enabled: bool = False
+    signup_max_owners: int = 100
+    signup_per_ip_per_hour: int = 5
 
     artifact_dir: str = "./data/artifacts"
     web_dist_dir: str | None = None  # serve the built React app from the API when set

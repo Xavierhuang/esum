@@ -251,6 +251,19 @@
         "title": "ArtifactOut",
         "type": "object"
       },
+      "AuthOptionsOut": {
+        "properties": {
+          "signup": {
+            "title": "Signup",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "signup"
+        ],
+        "title": "AuthOptionsOut",
+        "type": "object"
+      },
       "AuthorizeIn": {
         "properties": {
           "connection_id": {
@@ -1522,6 +1535,11 @@
             "title": "Csrf Token",
             "type": "string"
           },
+          "default_model": {
+            "default": "",
+            "title": "Default Model",
+            "type": "string"
+          },
           "email": {
             "title": "Email",
             "type": "string"
@@ -1533,6 +1551,21 @@
           "mode": {
             "title": "Mode",
             "type": "string"
+          },
+          "model_key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelKeyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "needs_model_key": {
+            "default": false,
+            "title": "Needs Model Key",
+            "type": "boolean"
           },
           "response_style": {
             "title": "Response Style",
@@ -1868,6 +1901,107 @@
           "created_at"
         ],
         "title": "MessageOut",
+        "type": "object"
+      },
+      "ModelKeyIn": {
+        "properties": {
+          "api_key": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Api Key",
+            "type": "string"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "anthropic",
+              "zenmux",
+              "custom"
+            ],
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "api_key"
+        ],
+        "title": "ModelKeyIn",
+        "type": "object"
+      },
+      "ModelKeyOut": {
+        "properties": {
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "key_hint": {
+            "title": "Key Hint",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_label": {
+            "title": "Provider Label",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "provider_label",
+          "base_url",
+          "model",
+          "key_hint",
+          "updated_at",
+          "last_used_at"
+        ],
+        "title": "ModelKeyOut",
         "type": "object"
       },
       "ModesIn": {
@@ -2606,6 +2740,35 @@
           "last_used_at"
         ],
         "title": "SignInOut",
+        "type": "object"
+      },
+      "SignupIn": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          },
+          "time_zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Zone"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "SignupIn",
         "type": "object"
       },
       "SkillOut": {
@@ -3844,6 +4007,63 @@
           }
         },
         "summary": "Post Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/options": {
+      "get": {
+        "description": "What the sign-in page may offer before anyone is signed in.",
+        "operationId": "auth_options_api_auth_options_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthOptionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Auth Options",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/signup": {
+      "post": {
+        "description": "Creates a new private account and signs it in. Off unless OPA_SIGNUP_ENABLED is set.",
+        "operationId": "post_signup_api_auth_signup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Signup",
         "tags": [
           "auth"
         ]
@@ -5730,6 +5950,87 @@
         "summary": "Accept",
         "tags": [
           "memory"
+        ]
+      }
+    },
+    "/api/model-key": {
+      "delete": {
+        "operationId": "delete_model_key_api_model_key_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete Model Key",
+        "tags": [
+          "model"
+        ]
+      },
+      "get": {
+        "operationId": "get_model_key_api_model_key_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ModelKeyOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Model Key Api Model Key Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Model Key",
+        "tags": [
+          "model"
+        ]
+      },
+      "put": {
+        "description": "Checks the key with one tiny request to the provider, then stores it encrypted. Replaces any earlier key.",
+        "operationId": "put_model_key_api_model_key_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelKeyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelKeyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Model Key",
+        "tags": [
+          "model"
         ]
       }
     },

@@ -16,6 +16,9 @@ from opa.broker.app import create_broker_app
 
 OPA = Path(__file__).resolve().parents[1] / "opa"
 PUBLIC = {("POST", "/api/auth/login"), ("GET", "/api/oauth/google/callback")}  # the callback still requires a session (checked below)
+# Before an account exists: whether sign-up is offered, and sign-up itself (JSON only, so no cross-site form can post it).
+SIGNED_OUT = {("POST", "/api/auth/login"), ("POST", "/api/auth/signup"), ("GET", "/api/auth/options")}
+PUBLIC |= SIGNED_OUT
 
 
 def _routes(app):
@@ -27,7 +30,7 @@ def _routes(app):
 async def test_every_route_rejects_anonymous_callers(app, anon, owner):
     checked = 0
     for method, path, concrete in _routes(app):
-        if (method, path) == ("POST", "/api/auth/login"):
+        if (method, path) in SIGNED_OUT:
             continue
         r = await anon.request(method, concrete, json={})
         if (method, path) == ("GET", "/api/oauth/google/callback"):

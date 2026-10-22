@@ -361,6 +361,23 @@ class BrokerWebSignIn(Base):
     updated_at: Mapped[datetime] = ts_col(onupdate=func.now())
 
 
+class BrokerModelKey(Base):
+    """The owner's own model API key (bring your own key), sealed like a provider credential. One per owner."""
+    __tablename__ = "model_keys"
+    __table_args__ = ({"schema": "broker"},)
+    id: Mapped[str] = mapped_column(String(26), primary_key=True, default=new_id)
+    owner_id: Mapped[str] = mapped_column(String(26), nullable=False, unique=True)
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+    base_url: Mapped[str | None] = mapped_column(String(500))
+    model: Mapped[str] = mapped_column(String(200), nullable=False)
+    key_hint: Mapped[str] = mapped_column(String(16), nullable=False)
+    dek_wrapped: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    secret_enc: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = ts_col()
+    updated_at: Mapped[datetime] = ts_col(onupdate=func.now())
+
+
 class DispatchClaim(Base):
     __tablename__ = "dispatch_claims"
     __table_args__ = {"schema": "broker"}

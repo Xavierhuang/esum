@@ -9,6 +9,12 @@ export interface Me {
   id: string; email: string; time_zone: string; assistant_name: string;
   response_style: string; mode: "demo" | "live"; setup_required: string[]; csrf_token: string;
   approval_mode: "ask_writes" | "always_ask";
+  default_model: string; model_key: ModelKey | null; needs_model_key: boolean; // v0.4 bring your own key
+}
+export type ModelProvider = "anthropic" | "zenmux" | "custom";
+export interface ModelKey {
+  provider: ModelProvider; provider_label: string; base_url: string | null; model: string; key_hint: string;
+  updated_at: string; last_used_at: string | null;
 }
 export interface Conversation { id: string; title: string; is_default: boolean; created_at: string }
 export interface Message {
@@ -69,6 +75,9 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 
 export const api = {
   login: (email: string, password: string) => req<void>("POST", "/api/auth/login", { email, password }),
+  authOptions: () => req<{ signup: boolean }>("GET", "/api/auth/options"),
+  signup: (email: string, password: string) =>
+    req<void>("POST", "/api/auth/signup", { email, password, time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
   logout: () => req<void>("POST", "/api/auth/logout"),
   me: () => req<Me>("GET", "/api/me"),
   conversations: () => req<Conversation[]>("GET", "/api/conversations"),
@@ -125,6 +134,10 @@ export interface Connection {
 }
 
 export const api2 = {
+  modelKey: () => req<ModelKey | null>("GET", "/api/model-key"),
+  saveModelKey: (body: { provider: ModelProvider; base_url: string | null; model: string; api_key: string }) =>
+    req<ModelKey>("PUT", "/api/model-key", body),
+  removeModelKey: () => req<void>("DELETE", "/api/model-key"),
   approvals: () => req<Approval[]>("GET", "/api/approvals"),
   decide: (a: Approval, decision: Decision, edits?: { subject?: string; body?: string }) =>
     req<{ approval: Approval; outcome: string }>("POST", `/api/approvals/${a.id}/decision`, { decision, expected_args_hash: a.args_hash, edits: edits ?? null }),

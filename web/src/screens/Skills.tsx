@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api2, ApiError, Connection, Me, Skill } from "../api";
+import { ModelSection } from "./ModelKey";
 
 // v0.2 harness: every capability is a skill the assistant loads when a request needs it.
 const STATUS: Record<string, string> = {
@@ -39,6 +40,8 @@ export function Skills({ me, onMe, tick, announce }: { me: Me; onMe: (m: Me) => 
         the assistant shows a card and nothing changes until you confirm it.
       </p>
       {error && <p role="alert" className="error">{error}</p>}
+
+      {me.mode === "live" && <ModelSection me={me} onMe={onMe} announce={announce} />}
 
       <h3>Accounts</h3>
       {accounts.length === 0 ? <p className="muted">No accounts yet. Ask in Chat to connect one.</p> : (

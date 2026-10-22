@@ -38,6 +38,9 @@ async def run_migrations_online() -> None:
     cfg = {"sqlalchemy.url": _url()}
     engine = async_engine_from_config(cfg, prefix="sqlalchemy.", poolclass=pool.NullPool)
     async with engine.connect() as conn:
+        broker_schema = get_settings().broker_schema
+        if broker_schema != "broker":
+            conn = await conn.execution_options(schema_translate_map={"broker": broker_schema})
         await conn.run_sync(_do_run)
     await engine.dispose()
 

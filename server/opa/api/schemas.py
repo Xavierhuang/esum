@@ -23,6 +23,26 @@ class LoginIn(BaseModel):
     password: str
 
 
+class SignupIn(BaseModel):
+    email: str
+    password: str
+    time_zone: str | None = None
+
+
+class AuthOptionsOut(BaseModel):
+    signup: bool
+
+
+class ModelKeyOut(BaseModel):
+    provider: str
+    provider_label: str
+    base_url: str | None
+    model: str
+    key_hint: str
+    updated_at: str
+    last_used_at: str | None
+
+
 class MeOut(BaseModel):
     id: str
     email: str
@@ -34,6 +54,9 @@ class MeOut(BaseModel):
     csrf_token: str
     approval_mode: str
     version: str
+    default_model: str = ""
+    model_key: ModelKeyOut | None = None  # bring your own key: provider, model and a hint such as "…1234", never the key
+    needs_model_key: bool = False  # live mode with no key anywhere: the app asks for one before the chat
 
 
 class PreferencesIn(BaseModel):

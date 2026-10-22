@@ -146,7 +146,7 @@ services:
 
   egress-proxy:
     build: { context: .., dockerfile: deploy/Dockerfile.server }
-    command: ["opa", "proxy", "--listen", "0.0.0.0:3128", "--allow", "api.anthropic.com:443"]
+    command: ["opa", "proxy", "--listen", "0.0.0.0:3128", "--allow", "api.anthropic.com:443", "--allow", "zenmux.ai:443"]
     networks: [model-egress, outbound]
 
 networks:

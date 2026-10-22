@@ -276,6 +276,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Auth Options
+         * @description What the sign-in page may offer before anyone is signed in.
+         */
+        get: operations["auth_options_api_auth_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Signup
+         * @description Creates a new private account and signs it in. Off unless OPA_SIGNUP_ENABLED is set.
+         */
+        post: operations["post_signup_api_auth_signup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/automations": {
         parameters: {
             query?: never;
@@ -889,6 +929,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/model-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Model Key */
+        get: operations["get_model_key_api_model_key_get"];
+        /**
+         * Put Model Key
+         * @description Checks the key with one tiny request to the provider, then stores it encrypted. Replaces any earlier key.
+         */
+        put: operations["put_model_key_api_model_key_put"];
+        post?: never;
+        /** Delete Model Key */
+        delete: operations["delete_model_key_api_model_key_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notifications": {
         parameters: {
             query?: never;
@@ -1206,6 +1268,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** AuthOptionsOut */
+        AuthOptionsOut: {
+            /** Signup */
+            signup: boolean;
         };
         /** AuthorizeIn */
         AuthorizeIn: {
@@ -1600,12 +1667,23 @@ export interface components {
             assistant_name: string;
             /** Csrf Token */
             csrf_token: string;
+            /**
+             * Default Model
+             * @default
+             */
+            default_model: string;
             /** Email */
             email: string;
             /** Id */
             id: string;
             /** Mode */
             mode: string;
+            model_key?: components["schemas"]["ModelKeyOut"] | null;
+            /**
+             * Needs Model Key
+             * @default false
+             */
+            needs_model_key: boolean;
             /** Response Style */
             response_style: string;
             /** Setup Required */
@@ -1726,6 +1804,37 @@ export interface components {
             seq: number;
             /** Task Id */
             task_id: string | null;
+        };
+        /** ModelKeyIn */
+        ModelKeyIn: {
+            /** Api Key */
+            api_key: string;
+            /** Base Url */
+            base_url?: string | null;
+            /** Model */
+            model: string;
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "anthropic" | "zenmux" | "custom";
+        };
+        /** ModelKeyOut */
+        ModelKeyOut: {
+            /** Base Url */
+            base_url: string | null;
+            /** Key Hint */
+            key_hint: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Model */
+            model: string;
+            /** Provider */
+            provider: string;
+            /** Provider Label */
+            provider_label: string;
+            /** Updated At */
+            updated_at: string;
         };
         /** ModesIn */
         ModesIn: {
@@ -1960,6 +2069,15 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** SignupIn */
+        SignupIn: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+            /** Time Zone */
+            time_zone?: string | null;
         };
         /** SkillOut */
         SkillOut: {
@@ -2668,6 +2786,57 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    auth_options_api_auth_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthOptionsOut"];
+                };
+            };
+        };
+    };
+    post_signup_api_auth_signup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -4060,6 +4229,77 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_model_key_api_model_key_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelKeyOut"] | null;
+                };
+            };
+        };
+    };
+    put_model_key_api_model_key_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelKeyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelKeyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_model_key_api_model_key_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

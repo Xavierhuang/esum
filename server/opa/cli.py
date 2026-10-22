@@ -85,7 +85,7 @@ def worker() -> None:
     from opa.browser.client import BrowserClient
 
     browser_client = BrowserClient(s.browser_url, s.internal_token) if s.browser_url and s.internal_token else None
-    w = Worker(s, get_sessionmaker(), build_adapter(s), broker=broker, browser=browser_client)
+    w = Worker(s, get_sessionmaker(), build_adapter(s, broker), broker=broker, browser=browser_client)
     asyncio.run(w.run_forever())
 
 
@@ -101,7 +101,9 @@ def broker() -> None:
 
     logging.basicConfig(level=logging.INFO)
     s = get_settings()
-    engine = create_async_engine(s.broker_database_url or s.database_url, pool_pre_ping=True)
+    from opa.db.engine import engine_options
+
+    engine = create_async_engine(s.broker_database_url or s.database_url, pool_pre_ping=True, **engine_options(s))
     b = Broker(s, async_sessionmaker(engine, expire_on_commit=False), SystemClock())
     uvicorn.run(create_broker_app(b, sweep_interval=30), host=s.bind_host, port=s.broker_bind_port)
 

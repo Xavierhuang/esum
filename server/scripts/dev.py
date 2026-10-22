@@ -98,9 +98,6 @@ def main() -> int:
     if not live and provider != "scripted":
         print("Demo mode never calls Claude. To use your API key, set OPA_MODE=live in server/.env (see docs/OPERATIONS.md).")
         return 1
-    if live and provider == "anthropic" and not cfg.get("OPA_ANTHROPIC_API_KEY"):
-        print("Live mode needs your Claude API key: set OPA_ANTHROPIC_API_KEY in server/.env (see server/.env.example).")
-        return 1
     email = os.environ.get("OPA_DEV_EMAIL", "demo@example.com")
     password = os.environ.get("OPA_DEV_PASSWORD", "demo-password-123")
 
@@ -119,6 +116,8 @@ def main() -> int:
     if not cfg.get("OPA_BROKER_KEK"):
         env["OPA_BROKER_KEK"] = broker_kek()  # sealed website sign-ins need it in demo mode too
     notes = []
+    if live and provider == "anthropic" and not cfg.get("OPA_ANTHROPIC_API_KEY"):
+        notes.append("No API key in server/.env: after signing in, the app asks for yours (Anthropic, ZenMux or another Anthropic-compatible provider).")
     if live and not (cfg.get("OPA_GOOGLE_CLIENT_ID") and cfg.get("OPA_GOOGLE_CLIENT_SECRET")):
         notes.append("Google is not set up (OPA_GOOGLE_CLIENT_ID and OPA_GOOGLE_CLIENT_SECRET), so Gmail and Calendar cannot be connected yet.")
     if not live and cfg.get("OPA_ANTHROPIC_API_KEY"):

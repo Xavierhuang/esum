@@ -16,6 +16,7 @@ type Expect<T extends true> = T;
 
 export type Contract = [
   Expect<Ok<Covered<UI.Me, S["MeOut"]>>>,
+  Expect<Ok<Covered<UI.ModelKey, S["ModelKeyOut"]>>>,
   Expect<Ok<Covered<UI.Conversation, S["ConversationOut"]>>>,
   Expect<Ok<Covered<UI.Message, S["MessageOut"]>>>,
   Expect<Ok<Covered<UI.Task, S["TaskOut"]>>>,

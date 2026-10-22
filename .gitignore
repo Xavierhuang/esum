@@ -12,3 +12,4 @@ web/dist/
 .mcp.json
 *.tsbuildinfo
 backups/
+deploy/cloud/dist/

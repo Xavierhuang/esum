@@ -7,6 +7,7 @@ import { Browser } from "./screens/Browser";
 import { Data } from "./screens/Data";
 import { ArtifactLinks, Files } from "./screens/Files";
 import { Memory } from "./screens/Memory";
+import { KeyOnboarding } from "./screens/ModelKey";
 import { ConnectionCard } from "./screens/ConnectionCard";
 import { Profile } from "./screens/Profile";
 import { Skills } from "./screens/Skills";
@@ -46,7 +47,9 @@ export function App() {
 
   if (!checked) return <p role="status" className="center loading"><Avatar size={64} /><span className="sr-only">Loading…</span></p>;
   if (!me) return <Login onDone={load} />;
-  return <Shell me={me} onLogout={async () => { await api.logout(); setMe(null); }} />;
+  const logout = async () => { await api.logout(); setMe(null); };
+  if (me.needs_model_key) return <KeyOnboarding me={me} onDone={load} onLogout={logout} />;
+  return <Shell me={me} setMe={setMe} onLogout={logout} />;
 }
 
 const POINTS: [IconName, string, string][] = [
@@ -60,6 +63,11 @@ function Login({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [canSignup, setCanSignup] = useState(false);
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  useEffect(() => { api.authOptions().then((o) => setCanSignup(o.signup)).catch(() => undefined); }, []);
+  const signingUp = mode === "signup";
+  const switchTo = (m: "signin" | "signup") => { setMode(m); setError(""); setPassword(""); };
   return (
     <div className="landing">
       <header className="landing-top">
@@ -71,19 +79,35 @@ function Login({ onDone }: { onDone: () => void }) {
         <h1 className="headline">esum <span className="headline-avatar"><Avatar size={88} /></span>, AI that asks before it acts</h1>
         <form className="login" onSubmit={async (e) => {
           e.preventDefault(); setError(""); setBusy(true);
-          try { await api.login(email, password); onDone(); }
-          catch (err) { setError(err instanceof ApiError ? err.message : "Sign-in failed"); }
-          finally { setBusy(false); }
+          try {
+            if (signingUp) await api.signup(email, password);
+            else await api.login(email, password);
+            onDone();
+          } catch (err) {
+            setError(err instanceof ApiError ? err.message : signingUp ? "Could not create the account" : "Sign-in failed");
+          } finally { setBusy(false); }
         }}>
-          <h2 className="login-sub">Sign in to your assistant</h2>
+          <h2 className="login-sub">{signingUp ? "Create your account" : "Sign in to your assistant"}</h2>
           <label className="field-pill"><span>Email</span>
-            <input type="email" autoComplete="username" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <input type="email" autoComplete={signingUp ? "email" : "username"} placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </label>
           <label className="field-pill"><span>Password</span>
-            <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <input type="password" autoComplete={signingUp ? "new-password" : "current-password"} minLength={signingUp ? 12 : undefined}
+              aria-describedby={signingUp ? "pw-hint" : undefined} value={password} onChange={(e) => setPassword(e.target.value)} required />
           </label>
+          {signingUp && <p id="pw-hint" className="muted small form-hint">At least 12 characters. You'll add your own AI key next.</p>}
           {error && <p role="alert" className="error">{error}</p>}
-          <button type="submit" className="primary big" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
+          <button type="submit" className="primary big" disabled={busy}>
+            {busy ? (signingUp ? "Creating your account…" : "Signing in…") : signingUp ? "Create account" : "Sign in"}
+          </button>
+          {canSignup && (
+            <p className="switch-mode">
+              {signingUp ? "Already have an account?" : "New to esum?"}{" "}
+              <button type="button" className="link" onClick={() => switchTo(signingUp ? "signin" : "signup")}>
+                {signingUp ? "Sign in" : "Create an account"}
+              </button>
+            </p>
+          )}
         </form>
         <a className="pill learn" href="#learn">Learn more <Icon name="down" size={18} /></a>
       </main>
@@ -116,8 +140,7 @@ const RAIL: [Screen, string, IconName][] = [
 const MENU: [Screen, string][] = [["tasks", "Tasks"], ["approvals", "Approvals"], ["automations", "Automations"], ["files", "Files"],
   ["memory", "Memory"], ["browser", "Browser"], ["notifications", "Notifications"], ["skills", "Skills and accounts"], ["shares", "Shared links"], ["data", "Your data"]];
 
-function Shell({ me: initialMe, onLogout }: { me: Me; onLogout: () => void }) {
-  const [me, setMe] = useState(initialMe);
+function Shell({ me, setMe, onLogout }: { me: Me; setMe: (m: Me) => void; onLogout: () => void }) {
   const [notice] = useState(() => {
     // Returning from a provider sign-in: /?oauth=connected|error&provider=Notion&note=...&reason=...
     const q = new URLSearchParams(window.location.search);
