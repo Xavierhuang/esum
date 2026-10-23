@@ -15,7 +15,7 @@ const STATE: Record<TaskState, [string, IconName]> = {
 };
 const ACCOUNT_STATUS: Record<string, string> = { connected: "Connected", reauth_required: "Needs reconnecting", error: "Error" };
 
-type Go = (screen: "approvals" | "automations" | "skills" | "tasks") => void;
+type Go = (screen: "approvals" | "automations" | "skills" | "tasks" | "settings") => void;
 
 /** The assistant's profile: who it is, whether it is connected, and what it has been doing. */
 export function Profile({ me, tick, onClose, onGo }: { me: Me; tick: number; onClose: () => void; onGo: Go }) {
@@ -49,6 +49,7 @@ export function Profile({ me, tick, onClose, onGo }: { me: Me; tick: number; onC
         <Avatar size={128} />
         <h2 id="profile-h">{me.assistant_name}</h2>
         <p className={`presence${connected ? " on" : ""}`}><span className="presence-dot" />{connected ? "Connected" : "No accounts yet"}</p>
+        <button className="link" onClick={() => onGo("settings")}>Edit name and style</button>
       </div>
 
       <div role="tablist" aria-label="Assistant details" className="seg">

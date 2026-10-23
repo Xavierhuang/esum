@@ -29,6 +29,16 @@ class SignupIn(BaseModel):
     time_zone: str | None = None
 
 
+class PasswordChangeIn(BaseModel):
+    current_password: str = Field(max_length=1024)
+    new_password: str
+
+
+class DeleteAccountIn(BaseModel):
+    confirm: str  # the owner's email address, typed out
+    password: str = Field(max_length=1024)
+
+
 class AuthOptionsOut(BaseModel):
     signup: bool
 

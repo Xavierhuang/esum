@@ -59,6 +59,8 @@ textarea { width: 100%; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 label.block { display: block; margin: 10px 0; font-weight: 500; }
 label.block input, label.block textarea { display: block; width: 100%; margin-top: 4px; font-weight: 400; }
+.settings label.block select { display: block; margin-top: 4px; font-weight: 400; max-width: 100%; }
+.settings { max-width: 640px; }
 label.inline { margin-right: 12px; }
 fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm); margin: 10px 0; }
 .block { display: block; margin: 8px 0; }

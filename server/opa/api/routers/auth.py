@@ -4,12 +4,14 @@ from fastapi import APIRouter, Request, Response
 from sqlalchemy import delete
 
 from opa import __version__
-from opa.api.auth import SESSION_COOKIE, login, record_failed_attempt, signup, start_session, throttle_signup
+from opa.api.auth import (SESSION_COOKIE, check_new_password, confirm_password, hash_password, login, record_failed_attempt, signup,
+                          start_session, throttle_signup)
 from opa.core.errors import Unauthorized
 from opa.api.deps import ClockDep, DbDep, OwnerDep, SessionDep, SettingsDep
-from opa.api.schemas import AuthOptionsOut, LoginIn, MeOut, PreferencesIn, SignupIn
+from opa.api.schemas import AuthOptionsOut, DeleteAccountIn, LoginIn, MeOut, PasswordChangeIn, PreferencesIn, SignupIn
 from opa.core.errors import Invalid
-from opa.db.models import Session
+from opa.data.erase import erase_owner
+from opa.db.models import AuditLog, Owner, Session
 from opa.worker.model import setup_problems
 
 router = APIRouter(prefix="/api", tags=["auth"])
@@ -105,3 +107,37 @@ async def patch_me(body: PreferencesIn, request: Request, owner: OwnerDep, sess:
     if body.response_style is not None:
         owner.response_style = body.response_style
     return await get_me(request, owner, sess, settings)
+
+
+def _ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+@router.post("/me/password", status_code=204)
+async def change_password(body: PasswordChangeIn, request: Request, response: Response, db: DbDep, owner: OwnerDep, sess: SessionDep,
+                          settings: SettingsDep, clock: ClockDep) -> Response:
+    """Changes the password after re-checking the current one, and signs out every other session."""
+    await confirm_password(request.app.state.sessionmaker, db, settings, clock, owner, body.current_password, _ip(request))
+    check_new_password(body.new_password)
+    owner.password_hash = hash_password(body.new_password)
+    await db.execute(delete(Session).where(Session.owner_id == owner.id, Session.id != sess.id))
+    db.add(AuditLog(owner_id=owner.id, actor="owner", type="owner.password_changed", subject_id=owner.id, sanitized={}))
+    response.status_code = 204
+    return response
+
+
+@router.post("/me/delete-account", status_code=204)
+async def delete_account(body: DeleteAccountIn, request: Request, response: Response, db: DbDep, owner: OwnerDep,
+                         settings: SettingsDep, clock: ClockDep) -> Response:
+    """Deletes everything the owner has (as delete-all does), then the account and its sign-ins. Needs the email and password."""
+    if body.confirm.strip().lower() != owner.email.lower():
+        raise Invalid("type your account email address exactly to confirm", code="confirmation_required")
+    await confirm_password(request.app.state.sessionmaker, db, settings, clock, owner, body.password, _ip(request))
+    owner_id = owner.id
+    await erase_owner(request.app.state.sessionmaker, settings, clock, owner_id, request.app.state.broker, request.app.state.browser)
+    db.expunge(owner)
+    await db.execute(delete(AuditLog).where(AuditLog.owner_id == owner_id))
+    await db.execute(delete(Owner).where(Owner.id == owner_id))  # sessions and any remaining rows cascade
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    response.status_code = 204
+    return response

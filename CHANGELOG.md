@@ -2,11 +2,26 @@
 
 All notable changes are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased (v0.3 inbox triage)
+## Unreleased (v0.4 accounts, your own key, LingCode Cloud)
 
 ### Added
 - **Create an account:** with `OPA_SIGNUP_ENABLED=true` (on by default for the LingCode Cloud deployment), the sign-in page offers "Create an account". Each account is private: every record was already scoped to its owner, and each person brings their own model key. `OPA_SIGNUP_MAX_OWNERS` (default 100) caps accounts and `OPA_SIGNUP_PER_IP_PER_HOUR` (default 5) limits attempts per network. Off by default for self-hosted installs.
 - **Bring your own key:** in live mode, the first screen after sign-in asks for an API key from Anthropic, ZenMux or any provider that speaks the Anthropic Messages API (Custom, public https only). The key is checked with one tiny request, sealed in the broker's vault, and shown again only as `…1234`; the worker fetches it per task. Change or remove it under Skills and accounts. `OPA_ANTHROPIC_API_KEY` still works as the server-wide fallback.
+- **Settings screen** (Menu > Settings, or "Edit name and style" on the assistant's profile): rename the assistant, choose how it answers (concise, detailed, casual or formal), and set the time zone used for schedules. Closes the last open part of UX-01.
+- **Change password:** needs the current password; every other session is signed out. Wrong guesses count toward the login throttle.
+- **Delete account:** after typing the account email and the password, deletes everything "Delete all data" does, then the account, its sessions and its audit trail, which frees its place under the sign-up cap.
+- **LingCode Cloud deployment** (`deploy/cloud`): the whole stack runs in one hosted-app container behind a status page that names the failing start-up step. It works with a managed database role that cannot create schemas (broker tables are mapped into the app's schema) and checks the schema version when the platform applies migrations. Files and exports live in `/tmp` there, so they last until the next restart.
+
+### Changed
+- Compose's egress allow-list includes `zenmux.ai:443` for ZenMux keys.
+
+### Fixed
+- Demo mode outside `npm run dev` (Docker Compose, LingCode Cloud) answered everything with "OK. (scripted model)"; it now uses the built-in demo script wherever it runs.
+- `opa bootstrap-owner EMAIL --reset-password` changed the password of the first owner in the table whatever email was given; it now changes only that account and refuses an unknown email.
+
+## Unreleased (v0.3 inbox triage)
+
+### Added
 - **Inbox triage:** "Go through my inbox" sorts unread mail from the last day into needs your reply, FYI, and can ignore, posts that summary in the chat, then drafts up to five replies, one approval card at a time. Replies go only to the sender of the email they answer and follow the owner's tone from earlier messages in the thread. Anything that needs the owner's decision is listed, not drafted. See the `inbox-triage` skill.
 - **Edit before sending:** email approval cards have an Edit button for the subject and body. The edited email becomes a new action with its own hash, approved in the same click. The assistant's original draft stays in the ledger as proposed, and the assistant is told the owner changed it.
 - **Skip:** every approval card can skip one item. The task carries on with the rest, where Deny still stops it.

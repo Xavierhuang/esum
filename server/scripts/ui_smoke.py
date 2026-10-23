@@ -414,6 +414,20 @@ def _m6(page, snap) -> None:
     snap(page, "11-data-deleted")
     print("PASS delete-all needs the typed email and reports what happened")
 
+    # ---- v0.4: settings for the assistant and the account
+    go(page, "Settings")
+    page.get_by_label("Name", exact=True).fill("Juniper")
+    page.get_by_label("How it answers").select_option("detailed")
+    page.get_by_role("button", name="Save", exact=True).click()
+    expect(page.get_by_role("heading", name="Juniper", exact=True)).to_be_attached()
+    page.get_by_label("Current password").fill(PASSWORD)
+    page.get_by_label("New password").fill(PASSWORD + "-new")
+    page.get_by_role("button", name="Change password").click()
+    expect(page.get_by_role("status").filter(has_text="signed out everywhere else")).to_be_visible()
+    expect(page.get_by_role("button", name="Delete my account")).to_be_disabled()
+    snap(page, "12-settings")
+    print("PASS settings rename the assistant, change its style, and change the password")
+
 
 AXE = ROOT.parent / "web" / "node_modules" / "axe-core" / "axe.min.js"
 AXE_FINDINGS: list[str] = []

@@ -254,9 +254,14 @@ class OwnerKeyAdapter:
                               refusal_detail="no API key yet: add yours in Skills and accounts, then resume this task")
 
 
+DEMO_SCRIPT = Path(__file__).with_name("demo_script.yaml")
+
+
 def build_adapter(settings: Settings, broker: Any = None) -> ModelAdapter:
     if settings.model_provider == "scripted":
-        return ScriptedAdapter(path=settings.scripted_model_path)
+        # Demo mode walks through the canned demo wherever it runs (Compose, Cloud, npm run dev), not just from dev.py.
+        path = settings.scripted_model_path or (str(DEMO_SCRIPT) if settings.mode == "demo" else None)
+        return ScriptedAdapter(path=path)
     if settings.model_provider == "anthropic":
         if settings.mode == "demo":
             raise ModelSetupError("demo mode never makes provider calls; set OPA_MODEL_PROVIDER=scripted")

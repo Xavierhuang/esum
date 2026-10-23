@@ -29,34 +29,48 @@ def migrate() -> None:
     typer.echo("migrations applied")
 
 
-@app.command("bootstrap-owner")
-def bootstrap_owner(email: str, reset_password: bool = False) -> None:
-    """Create the single owner. The password is read from a hidden prompt (AUTH-01)."""
+async def bootstrap_owner_row(db, email: str, password: str, reset_password: bool) -> str:
+    """Creates the first owner, or with reset_password sets the password of the account with this email. Returns what happened."""
     from sqlalchemy import select
 
     from opa.api.auth import hash_password
-    from opa.db.engine import get_sessionmaker
     from opa.db.models import Owner
 
-    async def run() -> None:
-        async with get_sessionmaker()() as db, db.begin():
-            existing = await db.scalar(select(Owner))
-            if existing and not reset_password:
-                raise typer.Exit(code=typer.echo("an owner already exists; use --reset-password to change the password") or 1)
-            pw = getpass.getpass("Owner password: ")
-            if len(pw) < 12:
-                typer.echo("password must be at least 12 characters")
-                raise typer.Exit(code=1)
-            if pw != getpass.getpass("Repeat password: "):
-                typer.echo("passwords do not match")
-                raise typer.Exit(code=1)
-            if existing:
-                existing.password_hash = hash_password(pw)
-            else:
-                db.add(Owner(email=email.strip().lower(), password_hash=hash_password(pw)))
-        typer.echo("owner ready")
+    email = email.strip().lower()
+    mine = await db.scalar(select(Owner).where(Owner.email == email))
+    if reset_password:
+        if mine is None:
+            raise ValueError(f"no account uses {email}")
+        mine.password_hash = hash_password(password)
+        return "password reset"
+    if mine is not None or await db.scalar(select(Owner.id).limit(1)):
+        raise ValueError("an owner already exists; use --reset-password to change an account's password")
+    db.add(Owner(email=email, password_hash=hash_password(password)))
+    return "owner created"
 
-    asyncio.run(run())
+
+@app.command("bootstrap-owner")
+def bootstrap_owner(email: str, reset_password: bool = False) -> None:
+    """Create the first owner, or reset the password of the account with this email. The password is read from a hidden prompt (AUTH-01)."""
+    from opa.db.engine import get_sessionmaker
+
+    pw = getpass.getpass("Owner password: ")
+    if len(pw) < 12:
+        typer.echo("password must be at least 12 characters")
+        raise typer.Exit(code=1)
+    if pw != getpass.getpass("Repeat password: "):
+        typer.echo("passwords do not match")
+        raise typer.Exit(code=1)
+
+    async def run() -> str:
+        async with get_sessionmaker()() as db, db.begin():
+            return await bootstrap_owner_row(db, email, pw, reset_password)
+
+    try:
+        typer.echo(asyncio.run(run()))
+    except ValueError as e:
+        typer.echo(str(e))
+        raise typer.Exit(code=1) from None
 
 
 @app.command()

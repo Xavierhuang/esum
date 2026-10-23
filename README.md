@@ -10,7 +10,7 @@
 ![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)
 ![React 18](https://img.shields.io/badge/react-18-61DAFB?logo=react&logoColor=black)
 ![PostgreSQL 16](https://img.shields.io/badge/postgres-16-4169E1?logo=postgresql&logoColor=white)
-![Tests: 281 passing](https://img.shields.io/badge/tests-281%20passing-2ea44f)
+![Tests: 318 passing](https://img.shields.io/badge/tests-318%20passing-2ea44f)
 ![Release gates: 10/10](https://img.shields.io/badge/release%20gates-10%2F10-2ea44f)
 [![Built with LingCode](https://img.shields.io/badge/built%20with-LingCode-8A2BE2)](https://lingcode.dev)
 
@@ -34,7 +34,7 @@ The whole project (requirements, technical design, backend, frontend, tests, and
 |---|---|
 | 🐍 **~12,000 lines** of Python backend | FastAPI · PostgreSQL · six isolated services |
 | ⚛️ **~1,900 lines** of React frontend | Chat-first, passes automated accessibility checks (axe-core) |
-| 🧪 **281 automated tests** | Plus mutation checks: each safety rule was deliberately broken to prove a test catches it |
+| 🧪 **318 automated tests** | Plus mutation checks: each safety rule was deliberately broken to prove a test catches it |
 | ✅ **10/10 release gates** | Locked dependencies, linting, migrations, secret scanning, browser smoke tests, fresh install verification, and more |
 | 🧩 **11 skills** | Gmail · Calendar · Drive · Notion · GitHub · Files · Memory · Automations · Browser · Daily brief · Inbox triage |
 
@@ -57,6 +57,8 @@ The whole project (requirements, technical design, backend, frontend, tests, and
 - **📄 Files & Memory** — Generates Markdown, CSV, and PDF files; remembers only what you explicitly ask it to keep.
 - **🌐 Isolated Browser** — Reads web pages in a sandbox that starts signed out (no form submissions). Sign in to a site yourself and save it, and the assistant can read it with your approval, never seeing your password or session. Watch it live and take control at any time.
 - **🔗 Sharing** — Convert selected messages into a read-only snapshot link that lasts 1, 7, or 30 days, and revoke access whenever you want.
+- **🔑 Bring your own key** — Paste a key from Anthropic, ZenMux, or any Anthropic-compatible provider. It is checked once, stored encrypted, and shown only as `…1234`.
+- **👥 Accounts** — Optional open sign-up (`OPA_SIGNUP_ENABLED=true`): everyone gets a private assistant. Rename yours, pick its style, change your password, or delete your account under Settings.
 - **🗂️ Ownership of Your Data** — One-click full data export, one-click complete purge, plus full backup and restore capabilities.
 
 ### 🔒 Security by Design
@@ -119,9 +121,13 @@ docker compose --env-file .env -f deploy/compose.yaml run --rm api opa bootstrap
 
 The app listens on `127.0.0.1:8080` only. To reach it from elsewhere (for example, so people can open your share links), put it behind an **HTTPS reverse proxy** and set `OPA_SECURE_COOKIES=true` and `OPA_PUBLIC_BASE_URL=https://your-domain`. Backups, restore, running the services yourself, and upgrades are in the [operations guide](docs/OPERATIONS.md).
 
-### 📊 Status: v0.3 preview
+### ☁️ Deploy (LingCode Cloud)
 
-To be straight about it: every feature passes the automated tests, but **the real Google, Notion, GitHub, and Claude APIs have not been exercised live yet** (tests use fakes built to the providers' published contracts), and **the Docker Compose deployment has not yet been run on a real Docker host**. Details in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). Try it, open issues, and send pull requests!
+`deploy/cloud` runs the whole stack in one [LingCode Cloud](https://lingcode.dev) hosted app: `python3 deploy/cloud/build.py`, then deploy `deploy/cloud/dist` as a hosted Python app. Add `OPA_BROKER_KEK` (from `opa generate-kek`) to the backend's secrets before anyone saves a key, and keep a copy: keys saved under one KEK cannot be read with another. Sign-up is on by default there; set `OPA_SIGNUP_ENABLED=false` to turn it off. Files and exports are kept until the next restart. Details are in the [operations guide](docs/OPERATIONS.md).
+
+### 📊 Status: v0.4 preview
+
+To be straight about it: every feature passes the automated tests, but **the real Google, Notion, GitHub, and Claude APIs have not been exercised live yet** (tests use fakes built to the providers' published contracts). The Docker Compose deployment has been built, run, backed up, and restored on a real Docker host. Details in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). Try it, open issues, and send pull requests!
 
 ### 📚 Docs
 

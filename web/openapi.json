@@ -1240,6 +1240,25 @@
         "title": "DecisionOut",
         "type": "object"
       },
+      "DeleteAccountIn": {
+        "properties": {
+          "confirm": {
+            "title": "Confirm",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 1024,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirm",
+          "password"
+        ],
+        "title": "DeleteAccountIn",
+        "type": "object"
+      },
       "DeleteAllIn": {
         "properties": {
           "confirm": {
@@ -2138,6 +2157,25 @@
           "changes"
         ],
         "title": "OccurrenceOut",
+        "type": "object"
+      },
+      "PasswordChangeIn": {
+        "properties": {
+          "current_password": {
+            "maxLength": 1024,
+            "title": "Current Password",
+            "type": "string"
+          },
+          "new_password": {
+            "title": "New Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChangeIn",
         "type": "object"
       },
       "PatchIn": {
@@ -5670,6 +5708,76 @@
           }
         },
         "summary": "Patch Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/me/delete-account": {
+      "post": {
+        "description": "Deletes everything the owner has (as delete-all does), then the account and its sign-ins. Needs the email and password.",
+        "operationId": "delete_account_api_me_delete_account_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Account",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/me/password": {
+      "post": {
+        "description": "Changes the password after re-checking the current one, and signs out every other session.",
+        "operationId": "change_password_api_me_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change Password",
         "tags": [
           "auth"
         ]

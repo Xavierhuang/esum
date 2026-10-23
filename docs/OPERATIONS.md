@@ -71,6 +71,22 @@ docker compose --env-file .env -f deploy/compose.yaml run --rm api opa bootstrap
 
 The API binds to `127.0.0.1:8080` only. The worker has no internet route except an egress proxy that allows only the model host; only the broker can reach provider APIs. For remote access, put it behind an HTTPS reverse proxy and set `OPA_SECURE_COOKIES=true`.
 
+## Run on LingCode Cloud
+
+`deploy/cloud/start.py` runs every service in one LingCode Cloud hosted-app container. It answers on `$PORT` straight away with a status page (`{"esum": "starting", "step": ...}`, and on failure the step and its output with secrets blanked), starts the broker, worker, scheduler, browser, and egress proxy on localhost, and then hands `$PORT` to the API. A background service that stops is restarted, up to five times in ten minutes.
+
+```sh
+python3 deploy/cloud/build.py      # assembles deploy/cloud/dist (server, built web app, Procfile)
+```
+
+Deploy `deploy/cloud/dist` as a hosted Python app, then:
+
+1. **Schema.** If the app's database role may create tables, the launcher runs the migrations itself. On a managed database that does not allow it, apply the schema with the platform's migration tool (the SQL that `alembic upgrade head --sql` prints, with the `broker.` prefix removed) and the launcher only checks that `alembic_version` matches the code. Broker tables go into the app's own schema (`OPA_BROKER_SCHEMA`) when it cannot create a `broker` schema.
+2. **Secrets.** Add `OPA_BROKER_KEK` (from `opa generate-kek`) to the backend's secrets and redeploy. Keep a copy somewhere safe: every saved key and sign-in is sealed with it, and a different KEK cannot open them. Optional: `OPA_OWNER_EMAIL` and `OPA_OWNER_PASSWORD` create a first account, `OPA_ANTHROPIC_API_KEY` sets a server-wide key, and the Google, Notion, and GitHub OAuth settings.
+3. **Accounts.** Sign-up is on by default here (`OPA_SIGNUP_ENABLED=false` turns it off), limited to `OPA_SIGNUP_MAX_OWNERS` accounts (100) and `OPA_SIGNUP_PER_IP_PER_HOUR` attempts per network (5). There is no password reset by email yet. Anyone with a shell and the database URL can run `opa bootstrap-owner their@email --reset-password`, which changes only that account's password; otherwise the person signs up again with another address.
+
+The container's disk is read-only apart from `/tmp`, so uploaded files and exports last until the next restart. Everything else is in Postgres.
+
 ## Model configuration
 
 `OPA_MODE=demo` with `OPA_MODEL_PROVIDER=scripted` needs no keys and makes no network calls. For real use set `OPA_MODE=live`, `OPA_MODEL_PROVIDER=anthropic`, and `OPA_ANTHROPIC_API_KEY` (`npm run dev` picks `anthropic` by itself in live mode). The default model is `claude-opus-5-5` at effort `high`, with Anthropic's server-side refusal fallback turned on. Missing configuration appears as a setup banner in the UI rather than a silent fallback.
@@ -136,6 +152,8 @@ The assistant can read public web pages through an isolated Chromium. It starts 
 
 **Your data** has **Create export** (a ZIP of everything you created, with a JSON Schema for each file; no passwords, tokens, or credentials) and **Delete all data** (type your email address to confirm). Delete-all cancels running work, disconnects and revokes accounts, and removes your data and files; your sign-in stays. Backups taken earlier still contain your data until you delete them.
 
+**Settings** (in the menu) renames the assistant, sets how it answers and your time zone, changes your password (other sessions are signed out), and deletes your account: after you type your email and password, it does everything Delete all data does and then removes the account and its sign-in.
+
 ## Backup, restore, and teardown
 
 Backups need the PostgreSQL 16 client tools (`pg_dump`, `pg_restore`); set `OPA_PG_BIN_DIR` if they are not on `PATH`. Run them with the database **owner** role.
@@ -155,6 +173,15 @@ To restore, point the commands at an **empty** database and an **empty** artifac
 OPA_DATABASE_URL=postgresql+asyncpg://OWNER:PASS@localhost:5432/opa_restored OPA_ARTIFACT_DIR=/new/artifacts \
   .venv/bin/opa restore /path/to/backups/2026-10-01
 .venv/bin/opa db-roles    # re-create role grants on the restored database
+```
+
+With Compose, restore before the app starts (a fresh stack migrates on start, and restore needs an empty database):
+
+```sh
+docker compose --env-file .env -f deploy/compose.yaml up -d postgres      # wait until it reports healthy
+docker compose --env-file .env -f deploy/compose.yaml --profile ops run --rm ops opa restore /backups/2026-10-01
+docker compose --env-file .env -f deploy/compose.yaml --profile ops run --rm ops opa db-roles
+docker compose --env-file .env -f deploy/compose.yaml up -d
 ```
 
 Restore verifies every file against the manifest first. Afterwards nothing resumes on its own: automations are paused (resume each in **Automations**), pending approvals are cancelled, a write that was in flight during the backup is marked "outcome unknown" for you to check, and interrupted tasks are blocked for review.

@@ -133,6 +133,8 @@ export interface Connection {
   capabilities: CapabilityInfo[];
 }
 
+export type ResponseStyle = "concise" | "detailed" | "casual" | "formal";
+
 export const api2 = {
   modelKey: () => req<ModelKey | null>("GET", "/api/model-key"),
   saveModelKey: (body: { provider: ModelProvider; base_url: string | null; model: string; api_key: string }) =>
@@ -146,6 +148,10 @@ export const api2 = {
   resolve: (id: string, outcome: "happened" | "did_not_happen") => req<Action>("POST", `/api/actions/${id}/resolve`, { outcome }),
   connections: () => req<Connection[]>("GET", "/api/connections"),
   setApprovalMode: (mode: "ask_writes" | "always_ask") => req<Me>("PATCH", "/api/me", { approval_mode: mode }),
+  updateMe: (patch: { assistant_name?: string; response_style?: ResponseStyle; time_zone?: string }) => req<Me>("PATCH", "/api/me", patch),
+  changePassword: (current_password: string, new_password: string) =>
+    req<void>("POST", "/api/me/password", { current_password, new_password }),
+  deleteAccount: (confirm: string, password: string) => req<void>("POST", "/api/me/delete-account", { confirm, password }),
   confirmRequest: (id: string) => req<{ request: ConnectionRequest; authorization_url: string | null }>("POST", `/api/connection-requests/${id}/confirm`),
   declineRequest: (id: string) => req<ConnectionRequest>("POST", `/api/connection-requests/${id}/decline`),
   skills: () => req<Skill[]>("GET", "/api/skills"),

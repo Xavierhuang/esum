@@ -99,6 +99,21 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD = 12
 
 
+def check_new_password(password: str) -> None:
+    if len(password) < MIN_PASSWORD:
+        raise Invalid(f"use a password of at least {MIN_PASSWORD} characters")
+    if len(password) > 1024:
+        raise Invalid("that password is too long")
+
+
+async def confirm_password(sessionmaker, db: AsyncSession, settings: Settings, clock: Clock, owner: Owner, password: str, client_ip: str) -> None:
+    """Re-checks the signed-in owner's password before a sensitive change. Wrong guesses count like failed logins."""
+    await _throttle(db, f"email:{owner.email}", settings, clock)
+    if not verify_password(owner.password_hash, password):
+        await record_failed_attempt(sessionmaker, clock, owner.email, client_ip)
+        raise Forbidden("that is not your current password", code="wrong_password")
+
+
 async def signup(db: AsyncSession, settings: Settings, clock: Clock, email: str, password: str, time_zone: str | None) -> Owner:
     """Open sign-up: a new, separate owner. Every record is scoped to its owner, so accounts never see each other."""
     if not settings.signup_enabled:
@@ -106,10 +121,7 @@ async def signup(db: AsyncSession, settings: Settings, clock: Clock, email: str,
     email = email.strip().lower()
     if len(email) > 320 or not EMAIL_RE.match(email):
         raise Invalid("enter a valid email address")
-    if len(password) < MIN_PASSWORD:
-        raise Invalid(f"use a password of at least {MIN_PASSWORD} characters")
-    if len(password) > 1024:
-        raise Invalid("that password is too long")
+    check_new_password(password)
     zone = "UTC"
     if time_zone:
         from zoneinfo import ZoneInfo, ZoneInfoNotFoundError

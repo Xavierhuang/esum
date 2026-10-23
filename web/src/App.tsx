@@ -10,11 +10,12 @@ import { Memory } from "./screens/Memory";
 import { KeyOnboarding } from "./screens/ModelKey";
 import { ConnectionCard } from "./screens/ConnectionCard";
 import { Profile } from "./screens/Profile";
+import { Settings } from "./screens/Settings";
 import { Skills } from "./screens/Skills";
 import { ShareDialog, SharedLinks } from "./screens/Share";
 import { Avatar, Icon, IconName, stamp } from "./ui";
 
-type Screen = "chat" | "tasks" | "approvals" | "automations" | "browser" | "notifications" | "skills" | "shares" | "files" | "memory" | "data";
+type Screen = "chat" | "tasks" | "approvals" | "automations" | "browser" | "notifications" | "skills" | "shares" | "files" | "memory" | "data" | "settings";
 
 const STATE_LABEL: Record<TaskState, string> = {
   queued: "Queued", running: "Running", waiting_approval: "Needs approval", waiting_user: "Needs your reply",
@@ -49,7 +50,7 @@ export function App() {
   if (!me) return <Login onDone={load} />;
   const logout = async () => { await api.logout(); setMe(null); };
   if (me.needs_model_key) return <KeyOnboarding me={me} onDone={load} onLogout={logout} />;
-  return <Shell me={me} setMe={setMe} onLogout={logout} />;
+  return <Shell me={me} setMe={setMe} onLogout={logout} onSignedOut={() => setMe(null)} />;
 }
 
 const POINTS: [IconName, string, string][] = [
@@ -138,9 +139,9 @@ const RAIL: [Screen, string, IconName][] = [
   ["files", "Files", "notebook"], ["memory", "Memory", "bulb"], ["tasks", "Tasks", "tasks"], ["skills", "Skills and accounts", "shapes"],
 ];
 const MENU: [Screen, string][] = [["tasks", "Tasks"], ["approvals", "Approvals"], ["automations", "Automations"], ["files", "Files"],
-  ["memory", "Memory"], ["browser", "Browser"], ["notifications", "Notifications"], ["skills", "Skills and accounts"], ["shares", "Shared links"], ["data", "Your data"]];
+  ["memory", "Memory"], ["browser", "Browser"], ["notifications", "Notifications"], ["skills", "Skills and accounts"], ["shares", "Shared links"], ["data", "Your data"], ["settings", "Settings"]];
 
-function Shell({ me, setMe, onLogout }: { me: Me; setMe: (m: Me) => void; onLogout: () => void }) {
+function Shell({ me, setMe, onLogout, onSignedOut }: { me: Me; setMe: (m: Me) => void; onLogout: () => void; onSignedOut: () => void }) {
   const [notice] = useState(() => {
     // Returning from a provider sign-in: /?oauth=connected|error&provider=Notion&note=...&reason=...
     const q = new URLSearchParams(window.location.search);
@@ -299,6 +300,7 @@ function Shell({ me, setMe, onLogout }: { me: Me; setMe: (m: Me) => void; onLogo
           {screen === "data" && <Data me={me} tick={tick} announce={setLive} />}
           {screen === "files" && <Files tick={tick} announce={setLive} focusId={fileFocus || undefined} />}
           {screen === "memory" && <Memory tick={tick} announce={setLive} />}
+          {screen === "settings" && <Settings me={me} onMe={setMe} onSignedOut={onSignedOut} announce={setLive} />}
         </main>
       </div>
 
