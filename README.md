@@ -99,6 +99,20 @@ Open **http://127.0.0.1:8080**, sign in with `demo@example.com` / `demo-password
 
 > Demo mode uses a sample mailbox, calendar, and documents, and the assistant's replies are scripted; **no real service is contacted**. In LingCode, just press **Run**.
 
+### 🛠️ How to run locally
+
+After the one-time install above:
+
+| Command | What it does |
+|---|---|
+| `npm run dev` (or `npm start`) | From the repo root: rebuilds the web app if `web/src` changed, then starts the database and every service. Demo mode by default; live mode if `server/.env` exists. Serves on http://127.0.0.1:8080. |
+| `cd web && npm run dev` | Optional: Vite dev server for working on the frontend alone. |
+| `cd web && npm run build` | Type-checks and builds the frontend into `web/dist/`. |
+| `cd server && .venv/bin/python -m pytest` | Backend tests. |
+| `cd server && .venv/bin/ruff check opa tests scripts` | Backend lint. |
+
+If `npm run dev` says `server/.venv` or `web/node_modules` is missing, run the install block above first.
+
 ### 🔌 Use your real Gmail and Claude
 
 1. Copy the local settings: `cp server/.env.example server/.env`
